@@ -19,8 +19,9 @@ Representa cada ubicación física perteneciente a la red de coworking.
 |---|---|---|---|
 | id_sede | INTEGER | Clave primaria | Identificador único de la sede |
 | nombre | VARCHAR(100) | Simple | Nombre de la sede |
-| direccion | VARCHAR(150) | Simple | Dirección física de la sede |
-| ciudad | VARCHAR(80) | Simple | Ciudad donde se encuentra la sede |
+| direccion | — | Compuesto | Dirección física de la sede |
+| ↳ calle | VARCHAR(150) | Componente simple | Calle o dirección principal de la sede |
+| ↳ ciudad | VARCHAR(80) | Componente simple | Ciudad donde se encuentra la sede |
 
 ## ESPACIO
 
@@ -30,8 +31,6 @@ Representa cada sala o escritorio disponible para reserva dentro de una sede de 
 |---|---|---|---|
 | id_espacio | INTEGER | Clave primaria | Identificador único del espacio |
 | nombre | VARCHAR(100) | Simple | Nombre o código utilizado para identificar el espacio |
-| tipo_espacio | VARCHAR(30) | Simple | Indica si el espacio corresponde a una sala o a un escritorio |
-| tarifa | DECIMAL(12,2) | Simple | Valor asociado al uso del espacio, determinado según la sede |
 
 ## RESERVA
 
@@ -65,5 +64,25 @@ Representa la asociación entre una reserva y cada uno de los espacios incluidos
 |---|---|---|---|
 | id_reserva | INTEGER | Clave compuesta / referencia a RESERVA | Identifica la reserva a la que pertenece la asignación |
 | id_espacio | INTEGER | Clave compuesta / referencia a ESPACIO | Identifica el espacio incluido en la reserva |
+
+## TIPO_ESPACIO
+
+Representa la categoría a la que pertenece un espacio disponible dentro de la red de coworking, por ejemplo, sala de juntas o escritorio individual.
+
+| Atributo | Tipo de dato | Clasificación | Descripción |
+|---|---|---|---|
+| id_tipo_espacio | INTEGER | Clave primaria | Identificador único del tipo de espacio |
+| nombre_tipo | VARCHAR(50) | Simple | Nombre de la categoría del espacio |
+| descripcion | VARCHAR(150) | Simple | Descripción general del tipo de espacio |
+
+## MODALIDAD_RESERVA
+
+Representa la modalidad de cobro utilizada para una reserva, según si el espacio se reserva por horas o por día.
+
+| Atributo | Tipo de dato | Clasificación | Descripción |
+|---|---|---|---|
+| id_modalidad | INTEGER | Clave primaria | Identificador único de la modalidad |
+| nombre_modalidad | VARCHAR(20) | Simple | Nombre de la modalidad, por ejemplo Hora o Día |
+
 
 
