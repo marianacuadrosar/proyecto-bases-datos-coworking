@@ -15,3 +15,4 @@ La Red de Espacios de Coworking administra diferentes sedes en las que ofrece sa
 11. La cuota se modelará como entidad débil.
 12. La relación entre RESERVA y ESPACIO se representará mediante una entidad asociativa.
 13. Se utilizarán identificadores internos para las entidades principales porque el caso no proporciona llaves naturales suficientes.
+14. Se asume que un cliente puede registrar uno o varios números de teléfono de contacto, por lo que teléfono se modela como un atributo multivaluado.
