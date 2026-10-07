@@ -192,3 +192,145 @@ Algunos atributos también identifican una fila por sí solos. Se llaman **llave
 Una dependencia como `documento → nombres` **no** viola la 3FN, porque `documento` es llave candidata.
 
 La 3FN solo prohíbe que un atributo dependa de otro que **no** es llave.
+
+---
+
+## 3. Primera forma normal (1FN)
+
+**Regla:** cada celda guarda un solo valor, no hay grupos repetidos y la tabla tiene llave primaria.
+
+RESERVA_SN no cumple. Se arregla en cinco pasos.
+
+### Paso 1. El atributo derivado `valor_total` se retira
+
+`valor_total` se calcula con los espacios de la reserva: `tarifa_aplicada` por las horas o los días de cada uno, y luego se suma.
+
+Reserva 10: 450.000 + 70.000 + 70.000 = **$590.000**.
+
+Esto no es una dependencia parcial ni transitiva. `reserva_id → valor_total` es una dependencia normal.
+
+Se retira por otra razón: repite información que ya está en otras filas. Si se agrega un espacio a la reserva y nadie actualiza el total, el total queda mal.
+
+Por eso no se guarda y se calcula al consultar, como lo explica `05_modelo_relacional.md`, sección 3.4.
+
+### Paso 2. El atributo compuesto `direccion` se parte
+
+`"Calle 63 # 9-45, Chapinero Alto, Bogotá"` se guarda en cuatro columnas: `calle`, `numero`, `barrio` y `ciudad`.
+
+Así cada celda tiene un solo dato y se puede filtrar por ciudad sin tener que partir un texto.
+
+### Paso 3. El atributo multivaluado `telefono` sale a su propia tabla
+
+Una celda con `3104567890, 6017654321` rompe la 1FN.
+
+Los teléfonos salen a una tabla nueva:
+
+**TELEFONO_CLIENTE** ( <ins>*cliente_id*</ins>, <ins>telefono</ins> )
+
+| cliente_id | telefono |
+|---|---|
+| 15 | 3104567890 |
+| 15 | 6017654321 |
+| 22 | 3157782190 |
+
+La tabla lleva `cliente_id` y no `reserva_id` porque el teléfono es del cliente, no de la reserva.
+
+Si llevara `reserva_id`, los dos teléfonos del cliente 15 se repetirían en las reservas 10 y 12.
+
+### Paso 4. El grupo de cuotas sale a su propia tabla
+
+**CUOTA** ( <ins>*reserva_id*</ins>, <ins>num_cuota</ins>, monto, fecha_pago, metodo_pago )
+
+| reserva_id | num_cuota | monto | fecha_pago | metodo_pago |
+|---|---|---|---|---|
+| 10 | 1 | 200000 | 2026-03-02 | Tarjeta de crédito |
+| 10 | 2 | 150000 | 2026-03-04 | Transferencia |
+| 11 | 1 | 80000 | 2026-05-10 | PSE |
+| 12 | 1 | 240000 | 2026-09-15 | Transferencia |
+| 13 | 1 | 250000 | 2026-09-22 | Tarjeta de débito |
+| 13 | 2 | 250000 | 2026-09-28 | Efectivo |
+
+**¿Por qué no dejar cuotas y espacios en la misma tabla?**
+
+Porque no tienen nada que ver entre sí. La cuota 1 de la reserva 10 no paga el espacio 7: paga una parte de la reserva completa.
+
+Si se ponen en la misma tabla, cada espacio queda combinado con cada cuota. La reserva 10 tendría 3 espacios × 2 cuotas = 6 filas:
+
+| reserva_id | espacio_id | num_cuota | monto |
+|---|---|---|---|
+| 10 | 3 | 1 | 200000 |
+| 10 | 3 | 2 | 150000 |
+| 10 | 7 | 1 | 200000 |
+| 10 | 7 | 2 | 150000 |
+| 10 | 8 | 1 | 200000 |
+| 10 | 8 | 2 | 150000 |
+
+Un `SUM(monto)` daría **$1.050.000** pagados, cuando en realidad se pagaron **$350.000**.
+
+Por eso cada grupo repetido sale a su propia tabla, con la llave de la reserva más su propia llave.
+
+### Paso 5. El grupo de espacios se vuelve una fila por espacio
+
+Cada espacio de la reserva pasa a ser una fila. Los datos de la reserva se copian en cada una.
+
+Ninguna columna sola identifica la fila: `reserva_id` se repite (la reserva 10 tiene tres filas) y `espacio_id` también (el espacio 3 está en las reservas 10, 12 y 13).
+
+La llave es la pareja `(reserva_id, espacio_id)`.
+
+### Resultado de la 1FN
+
+**RESERVA_DETALLE** ( <ins>reserva_id</ins>, <ins>espacio_id</ins>, fecha_creacion, estado, modalidad_id, modalidad_nombre, cliente_id, tipo_cliente, email, fecha_registro, documento, nombres, apellidos, fecha_nacimiento, nit, razon_social, nombre_contacto, codigo, capacidad, tipo_id, tipo_nombre, tipo_descripcion, sede_id, sede_nombre, calle, numero, barrio, ciudad, hora_apertura, hora_cierre, inicio, fin, tarifa_aplicada, valor_lista )
+
+**TELEFONO_CLIENTE** ( <ins>*cliente_id*</ins>, <ins>telefono</ins> )
+
+**CUOTA** ( <ins>*reserva_id*</ins>, <ins>num_cuota</ins>, monto, fecha_pago, metodo_pago )
+
+Así se ve RESERVA_DETALLE con los datos de ejemplo (solo algunas columnas):
+
+| reserva_id | espacio_id | fecha_creacion | modalidad_nombre | cliente_id | email | sede_id | sede_nombre | hora_cierre | tipo_nombre | inicio | fin | tarifa_aplicada | valor_lista |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 10 | 3 | 2026-03-02 | Día | 15 | reservas@andinaanalytics.co | 1 | Chapinero | 21:00 | Sala de juntas | 2026-03-05 08:00 | 2026-03-05 18:00 | 450000 | 500000 |
+| 10 | 7 | 2026-03-02 | Día | 15 | reservas@andinaanalytics.co | 1 | Chapinero | 21:00 | Escritorio flexible | 2026-03-05 08:00 | 2026-03-05 18:00 | 70000 | 70000 |
+| 10 | 8 | 2026-03-02 | Día | 15 | reservas@andinaanalytics.co | 1 | Chapinero | 21:00 | Escritorio flexible | 2026-03-05 08:00 | 2026-03-05 18:00 | 70000 | 70000 |
+| 11 | 12 | 2026-05-10 | Hora | 22 | srojas.pardo@gmail.com | 2 | Usaquén | 22:00 | Sala de juntas | 2026-05-12 09:00 | 2026-05-12 11:00 | 95000 | 95000 |
+| 12 | 3 | 2026-09-15 | Hora | 15 | reservas@andinaanalytics.co | 1 | Chapinero | 21:00 | Sala de juntas | 2026-09-21 14:00 | 2026-09-21 17:00 | 80000 | 80000 |
+| 13 | 3 | 2026-09-22 | Día | 22 | srojas.pardo@gmail.com | 1 | Chapinero | 21:00 | Sala de juntas | 2026-09-28 08:00 | 2026-09-28 18:00 | 500000 | 500000 |
+
+Ya cumple la 1FN: cada celda tiene un valor y hay llave primaria.
+
+Pero sigue repitiendo mucho:
+
+- Los datos del cliente 15 aparecen **4 veces** (tres filas de la reserva 10 y una de la 12).
+- Los datos de Chapinero aparecen **5 veces**.
+- `Día` aparece 4 veces y `Hora` 2.
+
+Eso se ataca en la 2FN y la 3FN.
+
+### Mapa de dependencias de RESERVA_DETALLE
+
+Este diagrama muestra de qué depende cada atributo. Las flechas **DP** son dependencias parciales (se resuelven en la 2FN) y las **DT** son transitivas (se resuelven en la 3FN).
+
+```mermaid
+flowchart LR
+    R["reserva_id"]
+    E["espacio_id"]
+    R -- DP1 --> RA["fecha_creacion<br/>estado"]
+    R -- DP1 --> MID["modalidad_id"]
+    R -- DP1 --> CID["cliente_id"]
+    MID -- DT1 --> MN["modalidad_nombre"]
+    CID -- DT2 --> CA["tipo_cliente, email, fecha_registro<br/>documento, nombres, apellidos, fecha_nacimiento<br/>nit, razon_social, nombre_contacto"]
+    E -- DP2 --> EA["codigo<br/>capacidad"]
+    E -- DP2 --> SID["sede_id"]
+    E -- DP2 --> TID["tipo_id"]
+    SID -- DT3 --> SA["sede_nombre, calle, numero, barrio, ciudad<br/>hora_apertura, hora_cierre"]
+    TID -- DT4 --> TA["tipo_nombre<br/>tipo_descripcion"]
+    SID -- DT5 --> VL["valor_lista"]
+    TID -- DT5 --> VL
+    MID -- DT5 --> VL
+    R -- completa --> F["inicio, fin<br/>tarifa_aplicada"]
+    E -- completa --> F
+```
+
+*Figura 3. Dependencias funcionales de RESERVA_DETALLE.*
+
+CUOTA y TELEFONO_CLIENTE no aparecen en el mapa. En las secciones 4 y 5 se muestra que ya están normalizadas.
