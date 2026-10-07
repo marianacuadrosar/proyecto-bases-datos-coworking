@@ -604,3 +604,147 @@ Las tres tablas siguen en 3FN y se vuelven a unir sin perder nada por `cliente_i
 | DT4: `tipo_id → datos del tipo` | Dependencia transitiva | 3FN | TIPO_ESPACIO |
 | DT5: `(sede_id, tipo_id, modalidad_id) → valor_lista` | Dependencia transitiva | 3FN | TARIFA |
 | Columnas vacías en CLIENTE | No es de forma normal: viene de la especialización | Después de 3FN | PERSONA_NATURAL y EMPRESA |
+
+---
+
+## 6. Esquema final en 3FN
+
+En la planilla las columnas llevaban prefijo para no repetir nombres. En las tablas finales el prefijo ya no hace falta:
+
+| En la planilla | En la tabla final |
+|---|---|
+| `sede_nombre` | `SEDE.nombre` |
+| `tipo_nombre`, `tipo_descripcion` | `TIPO_ESPACIO.nombre`, `TIPO_ESPACIO.descripcion` |
+| `modalidad_nombre` | `MODALIDAD.nombre` |
+| `valor_lista` | `TARIFA.valor` |
+
+El resultado son 12 tablas:
+
+| # | Tabla | Esquema | De dónde sale |
+|---|---|---|---|
+| 1 | SEDE | ( <ins>sede_id</ins>, nombre, calle, numero, barrio, ciudad, hora_apertura, hora_cierre ) | DT3 |
+| 2 | TIPO_ESPACIO | ( <ins>tipo_id</ins>, nombre, descripcion ) | DT4 |
+| 3 | MODALIDAD | ( <ins>modalidad_id</ins>, nombre ) | DT1 |
+| 4 | ESPACIO | ( <ins>espacio_id</ins>, codigo, capacidad, *sede_id*, *tipo_id* ) | DP2, después de sacar DT3 y DT4 |
+| 5 | CLIENTE | ( <ins>cliente_id</ins>, email, fecha_registro, tipo_cliente ) | DT2 + especialización |
+| 6 | TELEFONO_CLIENTE | ( <ins>*cliente_id*</ins>, <ins>telefono</ins> ) | 1FN, atributo multivaluado |
+| 7 | PERSONA_NATURAL | ( <ins>*cliente_id*</ins>, documento, nombres, apellidos, fecha_nacimiento ) | Especialización de CLIENTE |
+| 8 | EMPRESA | ( <ins>*cliente_id*</ins>, nit, razon_social, nombre_contacto ) | Especialización de CLIENTE |
+| 9 | RESERVA | ( <ins>reserva_id</ins>, fecha_creacion, estado, *cliente_id*, *modalidad_id* ) | DP1, después de sacar DT1 y DT2 |
+| 10 | RESERVA_ESPACIO | ( <ins>*reserva_id*</ins>, <ins>*espacio_id*</ins>, inicio, fin, tarifa_aplicada ) | Lo que quedó de RESERVA_DETALLE, después de sacar DT5 |
+| 11 | CUOTA | ( <ins>*reserva_id*</ins>, <ins>num_cuota</ins>, monto, fecha_pago, metodo_pago ) | 1FN, grupo repetido |
+| 12 | TARIFA | ( <ins>*sede_id*</ins>, <ins>*tipo_id*</ins>, <ins>*modalidad_id*</ins>, valor ) | DT5 |
+
+### 6.1 Las anomalías ya no ocurren
+
+| Anomalía de la sección 1.4 | Ahora |
+|---|---|
+| No se podía registrar la sede Cedritos sin una reserva | Se inserta una fila en SEDE |
+| No se podía guardar un cliente sin reserva | Se inserta en CLIENTE y en su subclase |
+| No se podía guardar la tarifa de escritorio por hora en Usaquén | Se inserta una fila en TARIFA |
+| Cambiar el horario de Chapinero tocaba 5 filas | Se cambia 1 fila en SEDE |
+| Cambiar el email del cliente 15 tocaba varias filas | Se cambia 1 fila en CLIENTE |
+| Borrar la reserva 11 borraba Usaquén, el espacio 12 y su tarifa | Solo se borran la reserva, su fila en RESERVA_ESPACIO y su cuota. SEDE, ESPACIO y TARIFA no se tocan |
+
+---
+
+## 7. Verificaciones
+
+### 7.1 No se perdió información
+
+Cada vez que se partió una tabla, la columna que causaba la dependencia quedó en las dos partes: como llave primaria en la tabla nueva y como llave foránea en la original.
+
+Por eso, al unir las tablas por esas columnas, cada fila encuentra exactamente una pareja. No aparecen filas de más ni se pierden filas.
+
+Esta consulta reconstruye RESERVA_DETALLE, la tabla de la 1FN, a partir de las tablas finales:
+
+```sql
+SELECT r.reserva_id, re.espacio_id,
+       r.fecha_creacion, r.estado,
+       m.nombre  AS modalidad_nombre,
+       c.cliente_id, c.email,
+       e.codigo, e.capacidad,
+       s.nombre  AS sede_nombre, s.ciudad, s.hora_cierre,
+       t.nombre  AS tipo_nombre,
+       re.inicio, re.fin, re.tarifa_aplicada,
+       ta.valor  AS valor_lista
+FROM RESERVA r
+JOIN MODALIDAD m        ON m.modalidad_id = r.modalidad_id
+JOIN CLIENTE c          ON c.cliente_id   = r.cliente_id
+JOIN RESERVA_ESPACIO re ON re.reserva_id  = r.reserva_id
+JOIN ESPACIO e          ON e.espacio_id   = re.espacio_id
+JOIN SEDE s             ON s.sede_id      = e.sede_id
+JOIN TIPO_ESPACIO t     ON t.tipo_id      = e.tipo_id
+LEFT JOIN TARIFA ta     ON ta.sede_id      = e.sede_id
+                       AND ta.tipo_id      = e.tipo_id
+                       AND ta.modalidad_id = r.modalidad_id;
+```
+
+La unión con TARIFA usa las tres columnas a la vez. Es la dependencia DT5 escrita en SQL.
+
+Se usa `LEFT JOIN` para que una reserva no desaparezca del resultado si su combinación de tarifa se deja de ofrecer después.
+
+### 7.2 Se conservaron todas las dependencias
+
+Cada dependencia del caso quedó completa dentro de una sola tabla, y su lado izquierdo es la llave de esa tabla.
+
+Eso significa que la base de datos las hace cumplir sola con la llave primaria, sin necesidad de procedimientos.
+
+| Dependencia | Tabla donde vive |
+|---|---|
+| DF1 `reserva_id → fecha_creacion, estado, cliente_id, modalidad_id` | RESERVA |
+| DF2 `modalidad_id → nombre` | MODALIDAD |
+| DF3 `cliente_id → datos del cliente` | CLIENTE, PERSONA_NATURAL y EMPRESA |
+| DF4 `espacio_id → codigo, capacidad, sede_id, tipo_id` | ESPACIO |
+| DF5 `sede_id → datos de la sede` | SEDE |
+| DF6 `tipo_id → nombre, descripcion` | TIPO_ESPACIO |
+| DF7 `(sede_id, tipo_id, modalidad_id) → valor` | TARIFA |
+| DF8 `(reserva_id, espacio_id) → inicio, fin, tarifa_aplicada` | RESERVA_ESPACIO |
+| DF9 `(reserva_id, num_cuota) → monto, fecha_pago, metodo_pago` | CUOTA |
+
+### 7.3 Extra: también están en FNBC
+
+La forma normal de Boyce-Codd (FNBC) es un poco más estricta que la 3FN: pide que **todo** lo que determine algo sea llave candidata.
+
+En las 12 tablas pasa eso. Los únicos determinantes que no son la llave primaria son `(sede_id, codigo)` en ESPACIO, `documento` en PERSONA_NATURAL y `nit` en EMPRESA, y los tres son llaves candidatas (sección 2.2).
+
+El proyecto solo pide 3FN, pero el modelo cumple también FNBC.
+
+---
+
+## 8. Cruce con el modelo relacional de Persona 3
+
+Se comparan las tablas obtenidas por normalización con las de `05_modelo_relacional.md`, que salieron del diagrama E/R.
+
+| Tabla en 3FN (este documento) | Tabla en `05_modelo_relacional.md` | Mismas columnas | Misma PK | Mismas FK |
+|---|---|---|---|---|
+| SEDE | SEDE (#1) | ✔ | ✔ | ✔ |
+| TIPO_ESPACIO | TIPO_ESPACIO (#2) | ✔ | ✔ | ✔ |
+| MODALIDAD | MODALIDAD (#3) | ✔ | ✔ | ✔ |
+| ESPACIO | ESPACIO (#4) | ✔ | ✔ | ✔ |
+| CLIENTE | CLIENTE (#5) | ✔ | ✔ | ✔ |
+| TELEFONO_CLIENTE | TELEFONO_CLIENTE (#6) | ✔ | ✔ | ✔ |
+| PERSONA_NATURAL | PERSONA_NATURAL (#7) | ✔ | ✔ | ✔ |
+| EMPRESA | EMPRESA (#8) | ✔ | ✔ | ✔ |
+| RESERVA | RESERVA (#9) | ✔ | ✔ | ✔ |
+| RESERVA_ESPACIO | RESERVA_ESPACIO (#10) | ✔ | ✔ | ✔ |
+| CUOTA | CUOTA (#11) | ✔ | ✔ | ✔ |
+| TARIFA | TARIFA (#12) | ✔ | ✔ | ✔ |
+
+**Las 12 tablas coinciden.** Los dos caminos, desde el diagrama E/R y desde la planilla sin normalizar, llegan al mismo modelo.
+
+Puntos donde la normalización confirma decisiones del modelo:
+
+- **TARIFA como relación ternaria.** Sale sola como DT5. Ninguna pareja de llaves alcanza para determinar el precio.
+- **`tarifa_aplicada` en RESERVA_ESPACIO.** No es una copia de `TARIFA.valor`: no depende de sede, tipo y modalidad (sección 5.3).
+- **`inicio` y `fin` en RESERVA_ESPACIO y no en RESERVA.** Dependen de la reserva y del espacio juntos (sección 2.1).
+- **`valor_total` sin columna.** Es derivado y se calcula al consultar.
+
+Notas para el DDL del Corte 3, que salen de este análisis:
+
+| Regla | Por qué | Cómo |
+|---|---|---|
+| `(sede_id, codigo)` no se repite | Es llave candidata de ESPACIO | `UNIQUE (sede_id, codigo)`, ya previsto en `05_modelo_relacional.md`, sección 4 |
+| `documento` y `nit` no se repiten | Son llaves candidatas | `UNIQUE` en cada uno, ya previsto en la sección 4 |
+| Un mismo email no se registra dos veces | Si el negocio lo exige, `email` también sería llave candidata de CLIENTE | `UNIQUE (email)`, por definir con el grupo |
+| `tarifa_aplicada` siempre tiene valor | Sin ella no se puede calcular `valor_total` | `NOT NULL` y `CHECK (tarifa_aplicada > 0)` |
