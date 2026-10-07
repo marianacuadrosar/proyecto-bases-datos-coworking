@@ -318,11 +318,11 @@ flowchart LR
     R -- DP1 --> MID["modalidad_id"]
     R -- DP1 --> CID["cliente_id"]
     MID -- DT1 --> MN["modalidad_nombre"]
-    CID -- DT2 --> CA["tipo_cliente, email, fecha_registro<br/>documento, nombres, apellidos, fecha_nacimiento<br/>nit, razon_social, nombre_contacto"]
+    CID -- DT2 --> CA["datos del cliente<br/>tipo, email, documento,<br/>nombres, nit, razon_social..."]
     E -- DP2 --> EA["codigo<br/>capacidad"]
     E -- DP2 --> SID["sede_id"]
     E -- DP2 --> TID["tipo_id"]
-    SID -- DT3 --> SA["sede_nombre, calle, numero, barrio, ciudad<br/>hora_apertura, hora_cierre"]
+    SID -- DT3 --> SA["datos de la sede<br/>nombre, dirección,<br/>horario"]
     TID -- DT4 --> TA["tipo_nombre<br/>tipo_descripcion"]
     SID -- DT5 --> VL["valor_lista"]
     TID -- DT5 --> VL
