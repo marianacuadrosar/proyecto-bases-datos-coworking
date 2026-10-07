@@ -9,10 +9,15 @@ La Red de Espacios de Coworking administra diferentes sedes en las que ofrece sa
 5. Una reserva puede incluir uno o varios espacios.
 6. Un mismo espacio puede aparecer en distintas reservas, siempre que no exista cruce de horario.
 7. Las reservas pueden realizarse por hora o por día.
-8. La tarifa de un espacio depende de la sede y del tipo de espacio.
+8. La tarifa de un espacio depende de la sede y del tipo de espacio, y también de la modalidad (hora o día).
 9. Cada cuota pertenece a una única reserva.
 10. El número de cuota es consecutivo dentro de cada reserva.
 11. La cuota se modelará como entidad débil.
 12. La relación entre RESERVA y ESPACIO se representará mediante una entidad asociativa.
 13. Se utilizarán identificadores internos para las entidades principales porque el caso no proporciona llaves naturales suficientes.
 14. Se asume que un cliente puede registrar uno o varios números de teléfono de contacto, por lo que teléfono se modela como un atributo multivaluado.
+15. Todo cliente es exactamente una persona natural o una empresa, nunca las dos ni ninguna. Por eso CLIENTE se especializa en PERSONA_NATURAL y EMPRESA.
+16. Toda sede tiene al menos un espacio; no se registran sedes vacías.
+17. Todos los espacios de una misma reserva se cobran con la misma modalidad: todos por hora o todos por día.
+18. Cada espacio dentro de una reserva puede tener su propio horario de inicio y fin (por ejemplo, la sala de 9 a 11 y los escritorios de 9 a 6).
+19. El precio cobrado en una reserva (tarifa aplicada) se guarda aparte de la tarifa vigente, porque puede ser distinto por descuentos o convenios, o porque la tarifa cambie después de hacer la reserva.
