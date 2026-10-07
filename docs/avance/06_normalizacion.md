@@ -423,3 +423,184 @@ Los tres atributos necesitan la llave completa. Ya está en 2FN.
 | Los datos de Chapinero aparecen 5 veces | Aparecen 3 veces, una por espacio (3, 7 y 8) |
 
 Mejoró, pero todavía se repite. El cliente 15 sigue escrito dos veces y Chapinero tres. Eso lo resuelve la 3FN.
+
+---
+
+## 5. Tercera forma normal (3FN)
+
+**Regla:** estar en 2FN y que ningún atributo no clave dependa de otro atributo no clave.
+
+El patrón que se busca es `llave → X → Y`, donde X **no** es llave. En ese caso Y depende de la llave solo "de rebote", a través de X.
+
+Se resuelve igual que en la 2FN: X se vuelve la llave de una tabla nueva, Y se va con ella y X se queda en la tabla original como llave foránea.
+
+### 5.1 RESERVA_2FN
+
+**DT1:** `reserva_id → modalidad_id → modalidad_nombre`
+
+`modalidad_nombre` no es un dato de la reserva: es el nombre de la modalidad. Las reservas 10 y 13 escriben "Día" cada una. Si alguien escribe "Diario" en una, la base tendría dos nombres para la misma modalidad.
+
+Se resuelve con **MODALIDAD** ( <ins>modalidad_id</ins>, nombre ).
+
+**DT2:** `reserva_id → cliente_id → tipo_cliente, email, fecha_registro, documento, nombres, apellidos, fecha_nacimiento, nit, razon_social, nombre_contacto`
+
+Los datos del cliente no son de la reserva. Por eso el cliente 15 aparece en las reservas 10 y 12 con todos sus datos repetidos.
+
+Se resuelve con **CLIENTE** ( <ins>cliente_id</ins>, tipo_cliente, email, fecha_registro, documento, nombres, apellidos, fecha_nacimiento, nit, razon_social, nombre_contacto ).
+
+Lo que queda:
+
+**RESERVA** ( <ins>reserva_id</ins>, fecha_creacion, estado, *cliente_id*, *modalidad_id* )
+
+Se revisa que no quede nada transitivo: `estado` no determina `fecha_creacion` ni al revés, y ninguno determina al cliente. Está en 3FN.
+
+### 5.2 ESPACIO_2FN
+
+**DT3:** `espacio_id → sede_id → sede_nombre, calle, numero, barrio, ciudad, hora_apertura, hora_cierre`
+
+La dirección y el horario son de la sede, no del espacio. Por eso Chapinero aparece tres veces, una por cada espacio que tiene.
+
+Se resuelve con **SEDE** ( <ins>sede_id</ins>, nombre, calle, numero, barrio, ciudad, hora_apertura, hora_cierre ).
+
+**DT4:** `espacio_id → tipo_id → tipo_nombre, tipo_descripcion`
+
+El nombre y la descripción son del tipo. Los espacios 7 y 8 repiten "Escritorio flexible" con su descripción.
+
+Se resuelve con **TIPO_ESPACIO** ( <ins>tipo_id</ins>, nombre, descripcion ).
+
+Lo que queda:
+
+**ESPACIO** ( <ins>espacio_id</ins>, codigo, capacidad, *sede_id*, *tipo_id* )
+
+Se revisa lo que queda:
+
+- `capacidad` se queda. No depende del tipo: el espacio 3 y el 12 son salas de juntas con capacidad 10 y 8 (sección 2.1).
+- `(sede_id, codigo) → espacio_id` sí se cumple, pero `(sede_id, codigo)` es llave candidata (sección 2.2). No es transitiva. En el DDL se garantiza con `UNIQUE (sede_id, codigo)`.
+
+Está en 3FN.
+
+### 5.3 RESERVA_ESPACIO: el caso de la tarifa
+
+Este es el caso más interesante, porque la dependencia transitiva cruza las dos partes de la llave.
+
+**DT5:** `(reserva_id, espacio_id) → (sede_id, tipo_id, modalidad_id) → valor_lista`
+
+Se arma así:
+
+- Del `espacio_id` salen `sede_id` y `tipo_id` (DF4).
+- Del `reserva_id` sale `modalidad_id` (DF1).
+- Y las tres juntas determinan `valor_lista` (DF7).
+
+`(sede_id, tipo_id, modalidad_id)` no es llave de RESERVA_ESPACIO. Por eso `valor_lista` depende de la llave solo a través de ellas: es transitiva.
+
+En la 2FN no se detectó porque no depende de **una** parte de la llave sino de las dos, cada una aportando un pedazo.
+
+**El problema en los datos:**
+
+| reserva_id | espacio_id | sede | tipo | modalidad | valor_lista |
+|---|---|---|---|---|---|
+| 10 | 3 | Chapinero | Sala de juntas | Día | 500000 |
+| 13 | 3 | Chapinero | Sala de juntas | Día | 500000 |
+| 10 | 7 | Chapinero | Escritorio flexible | Día | 70000 |
+| 10 | 8 | Chapinero | Escritorio flexible | Día | 70000 |
+
+- El mismo precio se repite cada vez que alguien reserva la misma combinación.
+- Si Chapinero sube el escritorio por día a $75.000, hay que cambiar todas las filas de escritorios por día en Chapinero.
+- La tarifa de escritorio por hora en Usaquén ($18.000) no se puede guardar, porque nadie lo ha reservado.
+
+Se resuelve con **TARIFA** ( <ins>*sede_id*</ins>, <ins>*tipo_id*</ins>, <ins>*modalidad_id*</ins>, valor ):
+
+| sede_id | tipo_id | modalidad_id | valor |
+|---|---|---|---|
+| 1 (Chapinero) | 1 (Sala de juntas) | 1 (Hora) | 80000 |
+| 1 (Chapinero) | 1 (Sala de juntas) | 2 (Día) | 500000 |
+| 1 (Chapinero) | 2 (Escritorio flexible) | 2 (Día) | 70000 |
+| 2 (Usaquén) | 1 (Sala de juntas) | 1 (Hora) | 95000 |
+| 2 (Usaquén) | 2 (Escritorio flexible) | 1 (Hora) | 18000 |
+
+Cada precio queda escrito una sola vez. La última fila ya se puede guardar aunque nadie haya reservado ese escritorio.
+
+**Esta tabla es exactamente la relación ternaria TARIFA del diagrama E/R.** La normalización llega a ella por su cuenta, lo que confirma la decisión de diseño 2.
+
+`valor_lista` sale de RESERVA_ESPACIO. Si se necesita, se obtiene uniendo las tablas (sección 7.1).
+
+**¿Y `tarifa_aplicada`? ¿No es lo mismo?**
+
+No. Es la pregunta más importante de esta sección.
+
+Si `tarifa_aplicada` dependiera de `(sede_id, tipo_id, modalidad_id)`, también sería transitiva y habría que sacarla. Pero esa dependencia **no se cumple**:
+
+| reserva_id | espacio_id | sede | tipo | modalidad | valor_lista | tarifa_aplicada |
+|---|---|---|---|---|---|---|
+| 10 | 3 | Chapinero | Sala de juntas | Día | 500000 | **450000** |
+| 13 | 3 | Chapinero | Sala de juntas | Día | 500000 | **500000** |
+
+Misma sede, mismo tipo, misma modalidad, y dos precios cobrados distintos.
+
+La reserva 10 tuvo el descuento del convenio empresarial. También pasa cuando la tarifa sube: las reservas viejas conservan el precio con el que se hicieron.
+
+`tarifa_aplicada` es un hecho de esa reserva y ese espacio. Depende de la llave completa y de nada más.
+
+Si se moviera a TARIFA, subir un precio hoy cambiaría lo que el cliente 15 pagó en marzo. Por eso se queda.
+
+Lo que queda:
+
+**RESERVA_ESPACIO** ( <ins>*reserva_id*</ins>, <ins>*espacio_id*</ins>, inicio, fin, tarifa_aplicada )
+
+`inicio`, `fin` y `tarifa_aplicada` dependen de la llave completa y no dependen entre sí. Está en 3FN.
+
+### 5.4 CLIENTE
+
+Después de DT2 la tabla queda así:
+
+**CLIENTE** ( <ins>cliente_id</ins>, tipo_cliente, email, fecha_registro, documento, nombres, apellidos, fecha_nacimiento, nit, razon_social, nombre_contacto )
+
+**¿Hay dependencias transitivas?**
+
+- `documento → nombres, apellidos, fecha_nacimiento`: se cumple, pero `documento` es llave candidata (sección 2.2). No viola la 3FN.
+- `nit → razon_social, nombre_contacto`: mismo caso, `nit` es llave candidata.
+
+La tabla **ya está en 3FN**. Pero tiene otro problema, que la 3FN no detecta:
+
+| cliente_id | tipo_cliente | email | documento | nombres | apellidos | fecha_nacimiento | nit | razon_social | nombre_contacto |
+|---|---|---|---|---|---|---|---|---|---|
+| 15 | EMPRESA | reservas@andinaanalytics.co | NULL | NULL | NULL | NULL | 901234567-8 | Andina Analytics S.A.S. | Laura Gómez |
+| 22 | NATURAL | srojas.pardo@gmail.com | 1020745332 | Santiago | Rojas Pardo | 1996-08-14 | NULL | NULL | NULL |
+
+Cada fila deja vacía casi la mitad de las columnas.
+
+Por eso se aplica la **especialización** del diagrama E/R (CLIENTE se divide en PERSONA_NATURAL o EMPRESA, disjunta y total):
+
+**CLIENTE** ( <ins>cliente_id</ins>, email, fecha_registro, tipo_cliente )
+
+**PERSONA_NATURAL** ( <ins>*cliente_id*</ins>, documento, nombres, apellidos, fecha_nacimiento )
+
+**EMPRESA** ( <ins>*cliente_id*</ins>, nit, razon_social, nombre_contacto )
+
+Esta división **no la exige la 3FN**: la tabla con nulos ya estaba en 3FN. La exige el diseño E/R y sirve para no tener columnas vacías.
+
+Las tres tablas siguen en 3FN y se vuelven a unir sin perder nada por `cliente_id`. Es la misma conclusión de `05_modelo_relacional.md`, sección 3.6.
+
+### 5.5 Las tablas que ya estaban en 3FN
+
+**CUOTA:** `monto`, `fecha_pago` y `metodo_pago` no dependen entre sí. Dos cuotas pagadas por transferencia tienen montos distintos (150.000 y 240.000), y el método no depende de la fecha.
+
+**TELEFONO_CLIENTE:** no tiene atributos fuera de la llave. No puede tener dependencias transitivas.
+
+### 5.6 Resumen de lo que se resolvió en cada paso
+
+| Problema | Tipo | Se resolvió en | Tabla que generó |
+|---|---|---|---|
+| `valor_total` | Atributo derivado | 1FN, paso 1 | Ninguna, se calcula al consultar |
+| `direccion` | Atributo compuesto | 1FN, paso 2 | Ninguna, queda partida en SEDE |
+| `telefono` | Atributo multivaluado | 1FN, paso 3 | TELEFONO_CLIENTE |
+| Grupo de cuotas | Grupo repetido | 1FN, paso 4 | CUOTA |
+| Grupo de espacios | Grupo repetido | 1FN, paso 5 | RESERVA_DETALLE, que luego se vuelve RESERVA_ESPACIO |
+| DP1: `reserva_id → datos de la reserva` | Dependencia parcial | 2FN | RESERVA |
+| DP2: `espacio_id → datos del espacio` | Dependencia parcial | 2FN | ESPACIO |
+| DT1: `modalidad_id → modalidad_nombre` | Dependencia transitiva | 3FN | MODALIDAD |
+| DT2: `cliente_id → datos del cliente` | Dependencia transitiva | 3FN | CLIENTE |
+| DT3: `sede_id → datos de la sede` | Dependencia transitiva | 3FN | SEDE |
+| DT4: `tipo_id → datos del tipo` | Dependencia transitiva | 3FN | TIPO_ESPACIO |
+| DT5: `(sede_id, tipo_id, modalidad_id) → valor_lista` | Dependencia transitiva | 3FN | TARIFA |
+| Columnas vacías en CLIENTE | No es de forma normal: viene de la especialización | Después de 3FN | PERSONA_NATURAL y EMPRESA |
