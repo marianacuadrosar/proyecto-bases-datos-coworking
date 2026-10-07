@@ -334,3 +334,92 @@ flowchart LR
 *Figura 3. Dependencias funcionales de RESERVA_DETALLE.*
 
 CUOTA y TELEFONO_CLIENTE no aparecen en el mapa. En las secciones 4 y 5 se muestra que ya están normalizadas.
+
+---
+
+## 4. Segunda forma normal (2FN)
+
+**Regla:** estar en 1FN y que ningún atributo no clave dependa de **solo una parte** de la llave primaria.
+
+Solo puede fallar en tablas con llave compuesta. Si la llave tiene una sola columna, no hay "parte" de la cual depender.
+
+### 4.1 Prueba atributo por atributo en RESERVA_DETALLE
+
+La llave es `(reserva_id, espacio_id)`. Para cada atributo se pregunta: ¿basta con `reserva_id`? ¿basta con `espacio_id`? ¿o necesita los dos?
+
+| Atributo | Lo determina | Evidencia en los datos |
+|---|---|---|
+| `fecha_creacion`, `estado` | Solo `reserva_id` | Las tres filas de la reserva 10 dicen 2026-03-02, sin importar el espacio |
+| `modalidad_id`, `modalidad_nombre` | Solo `reserva_id` | Las tres filas de la reserva 10 dicen Día |
+| `cliente_id` y todos los datos del cliente | Solo `reserva_id` | Las tres filas de la reserva 10 son del cliente 15 |
+| `codigo`, `capacidad` | Solo `espacio_id` | El espacio 3 es CH-SJ-01 para 10 personas en las reservas 10, 12 y 13 |
+| `tipo_id`, `tipo_nombre`, `tipo_descripcion` | Solo `espacio_id` | El espacio 3 siempre es sala de juntas |
+| `sede_id` y todos los datos de la sede | Solo `espacio_id` | El espacio 3 siempre está en Chapinero |
+| `inicio`, `fin` | Los dos | En la reserva 10 todos van de 08:00 a 18:00, pero el espacio 3 tiene otro horario en las reservas 12 y 13 |
+| `tarifa_aplicada` | Los dos | Reserva 10: 450.000, 70.000 y 70.000 según el espacio. Espacio 3: 450.000, 80.000 y 500.000 según la reserva |
+| `valor_lista` | Los dos | Espacio 3: 500.000 en la reserva 10 (por día) y 80.000 en la 12 (por hora). Reserva 10: 500.000 y 70.000 según el espacio |
+
+`valor_lista` necesita los dos lados: del espacio sale la sede y el tipo, y de la reserva sale la modalidad.
+
+Por eso no es dependencia parcial y sobrevive a la 2FN. Se resuelve en la 3FN (sección 5.3).
+
+### 4.2 Dependencias parciales encontradas
+
+**DP1:** `reserva_id → fecha_creacion, estado, modalidad_id, modalidad_nombre, cliente_id, tipo_cliente, email, fecha_registro, documento, nombres, apellidos, fecha_nacimiento, nit, razon_social, nombre_contacto`
+
+Todo esto depende de la reserva, no del espacio. Por eso se repite en cada espacio de la misma reserva.
+
+**DP2:** `espacio_id → codigo, capacidad, tipo_id, tipo_nombre, tipo_descripcion, sede_id, sede_nombre, calle, numero, barrio, ciudad, hora_apertura, hora_cierre`
+
+Todo esto depende del espacio, no de la reserva. Por eso se repite cada vez que alguien reserva el mismo espacio.
+
+*(En DP1 algunos atributos dependen de `reserva_id` a través de otro, por ejemplo `modalidad_nombre` a través de `modalidad_id`. Eso es una dependencia transitiva y se separa en la 3FN. Por ahora viajan juntos.)*
+
+### 4.3 Cómo se resuelven
+
+Cada dependencia parcial se saca a una tabla nueva:
+
+1. La parte de la llave que causa la dependencia se vuelve la llave primaria de la tabla nueva.
+2. Los atributos que dependen de ella se mueven a la tabla nueva.
+3. Esa parte de la llave se queda en la tabla original como llave foránea, para no perder la conexión.
+
+| Dependencia | Tabla nueva | Lo que queda en la tabla original |
+|---|---|---|
+| DP1 | RESERVA_2FN, con llave `reserva_id` | `reserva_id` como parte de la llave y FK |
+| DP2 | ESPACIO_2FN, con llave `espacio_id` | `espacio_id` como parte de la llave y FK |
+
+Lo que queda de RESERVA_DETALLE son los atributos que sí necesitan los dos: `inicio`, `fin`, `tarifa_aplicada` y `valor_lista`. Esa tabla es RESERVA_ESPACIO.
+
+### 4.4 Resultado de la 2FN
+
+**RESERVA_2FN** ( <ins>reserva_id</ins>, fecha_creacion, estado, modalidad_id, modalidad_nombre, cliente_id, tipo_cliente, email, fecha_registro, documento, nombres, apellidos, fecha_nacimiento, nit, razon_social, nombre_contacto )
+
+**ESPACIO_2FN** ( <ins>espacio_id</ins>, codigo, capacidad, tipo_id, tipo_nombre, tipo_descripcion, sede_id, sede_nombre, calle, numero, barrio, ciudad, hora_apertura, hora_cierre )
+
+**RESERVA_ESPACIO** ( <ins>*reserva_id*</ins>, <ins>*espacio_id*</ins>, inicio, fin, tarifa_aplicada, valor_lista )
+
+**TELEFONO_CLIENTE** ( <ins>*cliente_id*</ins>, <ins>telefono</ins> ) — sin cambios
+
+**CUOTA** ( <ins>*reserva_id*</ins>, <ins>num_cuota</ins>, monto, fecha_pago, metodo_pago ) — sin cambios
+
+### 4.5 Las tablas que no cambiaron
+
+**TELEFONO_CLIENTE** tiene llave compuesta, pero no tiene atributos fuera de la llave. No hay nada que pueda depender de una parte. Ya está en 2FN.
+
+**CUOTA** tiene llave compuesta `(reserva_id, num_cuota)`. Se revisa:
+
+- `reserva_id` solo no determina el monto: la reserva 10 tiene cuotas de 200.000 y 150.000.
+- `num_cuota` solo tampoco: la cuota 1 vale 200.000 en la reserva 10 y 80.000 en la 11.
+
+Los tres atributos necesitan la llave completa. Ya está en 2FN.
+
+**RESERVA_2FN** y **ESPACIO_2FN** tienen llave de una sola columna, así que están en 2FN automáticamente.
+
+### 4.6 Qué se ganó
+
+| Antes (1FN) | Después (2FN) |
+|---|---|
+| Los datos del cliente 15 aparecen 4 veces | Aparecen 2 veces, una por reserva (10 y 12) |
+| Los datos de Chapinero aparecen 5 veces | Aparecen 3 veces, una por espacio (3, 7 y 8) |
+
+Mejoró, pero todavía se repite. El cliente 15 sigue escrito dos veces y Chapinero tres. Eso lo resuelve la 3FN.
