@@ -1,145 +1,191 @@
 -- ============================================================
--- PROYECTO FINAL - BASES DE DATOS
+-- PERSONA 1
 -- BANCO DE CONSULTAS
 -- Caso 6: Red de espacios de coworking
 -- ============================================================
 
--- Cada consulta incluye:
--- 1. La pregunta de negocio que responde.
--- 2. La herramienta SQL utilizada.
--- 3. La justificación de por qué es apropiada.
 
 -- ============================================================
--- SECCIÓN 1: WHERE / ORDER BY
+-- CONSULTA 1 - WHERE / ORDER BY
+-- Reservas confirmadas ordenadas por fecha de creación
 -- ============================================================
 
 -- Pregunta de negocio:
--- ¿Cuáles son las próximas reservas confirmadas?
+-- ¿Cuáles son las reservas confirmadas más recientemente creadas?
 --
--- Se utiliza WHERE para seleccionar únicamente las reservas
--- confirmadas y futuras. ORDER BY permite mostrarlas
--- cronológicamente para facilitar su gestión operativa.
+-- Justificación:
+-- WHERE permite seleccionar únicamente las reservas que se
+-- encuentran confirmadas y ORDER BY permite mostrar primero
+-- las registradas más recientemente.
 
 SELECT
     reserva_id,
     cliente_id,
-    fecha_inicio,
-    hora_inicio,
+    fecha_creacion,
+    modalidad_id,
     estado
 FROM reserva
 WHERE estado = 'CONFIRMADA'
-  AND fecha_inicio >= CURRENT_DATE
-ORDER BY fecha_inicio ASC, hora_inicio ASC;
+ORDER BY fecha_creacion DESC;
 
 
+-- ============================================================
+-- CONSULTA 2 - WHERE / ORDER BY
+-- Espacios con capacidad mínima
+-- ============================================================
 
 -- Pregunta de negocio:
--- ¿Qué espacios se encuentran disponibles y cuáles tienen
--- mayor capacidad?
+-- ¿Qué espacios tienen capacidad para seis o más personas
+-- y cuáles ofrecen mayor capacidad?
 --
--- WHERE permite seleccionar únicamente los espacios
--- disponibles y ORDER BY permite priorizar aquellos
--- que tienen mayor capacidad.
+-- Justificación:
+-- WHERE permite filtrar los espacios que cumplen con una
+-- capacidad mínima y ORDER BY permite priorizar aquellos
+-- que pueden recibir más personas.
 
 SELECT
     espacio_id,
-    sede_id,
     codigo,
     capacidad,
-    estado
+    sede_id,
+    tipo_id
 FROM espacio
-WHERE estado = 'DISPONIBLE'
-ORDER BY capacidad DESC;
+WHERE capacidad >= 6
+ORDER BY capacidad DESC, codigo ASC;
+
+
+-- ============================================================
+-- CONSULTA 3 - WHERE / ORDER BY
+-- Cuotas sin fecha de pago
+-- ============================================================
 
 -- Pregunta de negocio:
--- ¿Cuáles son las cuotas pendientes de mayor valor?
+-- ¿Cuáles son las cuotas que todavía no tienen una fecha
+-- de pago registrada y cuáles representan los mayores montos?
 --
--- WHERE permite identificar únicamente las cuotas pendientes
--- y ORDER BY organiza primero aquellas de mayor valor.
+-- Justificación:
+-- WHERE permite identificar las cuotas sin pago registrado
+-- mediante IS NULL y ORDER BY permite mostrar primero las
+-- de mayor monto.
 
 SELECT
     reserva_id,
-    numero_cuota,
-    monto_pagado,
+    num_cuota,
+    monto,
     fecha_pago,
-    estado
+    metodo_pago
 FROM cuota
-WHERE estado = 'PENDIENTE'
-ORDER BY monto_pagado DESC;
+WHERE fecha_pago IS NULL
+ORDER BY monto DESC;
+
 
 -- ============================================================
--- SECCIÓN 2: UPDATE
+-- CONSULTA 4 - UPDATE
+-- Confirmar una reserva pendiente
 -- ============================================================
 
 -- Pregunta de negocio:
--- ¿Cómo se confirma una reserva que actualmente está pendiente?
+-- ¿Cómo se cambia una reserva de estado PENDIENTE
+-- a CONFIRMADA?
 --
--- UPDATE se utiliza porque se modifica el estado de un
--- registro ya existente sin crear una nueva reserva.
+-- Justificación:
+-- UPDATE permite modificar el estado de una reserva ya
+-- existente sin crear un nuevo registro.
 
 UPDATE reserva
 SET estado = 'CONFIRMADA'
 WHERE reserva_id = 25
   AND estado = 'PENDIENTE';
 
+
+-- ============================================================
+-- CONSULTA 5 - UPDATE
+-- Actualizar una tarifa
+-- ============================================================
+
 -- Pregunta de negocio:
--- ¿Cómo se actualiza una tarifa cuando cambia el precio
--- establecido para una combinación específica?
+-- ¿Cómo se actualiza el precio de una combinación específica
+-- de sede, tipo de espacio y modalidad?
 --
--- UPDATE permite modificar el precio conservando la misma
--- combinación de sede, tipo de espacio y modalidad.
+-- Justificación:
+-- UPDATE es adecuado porque la combinación tarifaria ya
+-- existe y únicamente cambia el valor asociado.
 
 UPDATE tarifa
-SET valor_tarifa = 85000.00
+SET valor = 85000.00
 WHERE sede_id = 2
-  AND tipo_espacio_id = 1
+  AND tipo_id = 1
   AND modalidad_id = 2;
 
+
+-- ============================================================
+-- CONSULTA 6 - UPDATE
+-- Actualizar capacidad de un espacio
+-- ============================================================
+
 -- Pregunta de negocio:
--- ¿Cómo se marca un espacio temporalmente fuera de servicio
--- cuando debe entrar a mantenimiento?
+-- ¿Cómo se actualiza la capacidad registrada de un espacio
+-- después de una modificación física o redistribución?
 --
--- UPDATE es apropiado porque el espacio continúa existiendo,
--- pero cambia su estado operacional.
+-- Justificación:
+-- UPDATE permite modificar uno de los atributos del espacio
+-- sin cambiar su identidad ni crear un nuevo registro.
 
 UPDATE espacio
-SET estado = 'MANTENIMIENTO'
-WHERE espacio_id = 18
-  AND estado = 'DISPONIBLE';
+SET capacidad = 10
+WHERE espacio_id = 18;
+
 
 -- ============================================================
--- SECCIÓN 3: DELETE
+-- CONSULTA 7 - DELETE
+-- Eliminar un teléfono de un cliente
 -- ============================================================
 
 -- Pregunta de negocio:
--- ¿Cómo se elimina un teléfono que un cliente ya no utiliza?
+-- ¿Cómo se elimina un número de teléfono que un cliente
+-- ya no utiliza?
 --
--- DELETE se utiliza porque ese número de contacto debe dejar
--- de formar parte de la información asociada al cliente.
+-- Justificación:
+-- DELETE permite eliminar únicamente el número de contacto,
+-- sin eliminar al cliente ni sus demás datos.
 
 DELETE FROM telefono_cliente
 WHERE cliente_id = 15
   AND telefono = '3001234567';
 
+
+-- ============================================================
+-- CONSULTA 8 - DELETE
+-- Retirar un espacio de una reserva
+-- ============================================================
+
 -- Pregunta de negocio:
--- ¿Cómo se retira un espacio de una reserva sin eliminar
--- ni el espacio ni la reserva?
+-- ¿Cómo se elimina un espacio específico de una reserva
+-- sin eliminar ni la reserva ni el espacio?
 --
--- DELETE elimina únicamente el registro de la entidad
--- asociativa RESERVA_ESPACIO.
+-- Justificación:
+-- DELETE elimina únicamente la fila de la entidad asociativa
+-- RESERVA_ESPACIO que conecta ambas entidades.
 
 DELETE FROM reserva_espacio
 WHERE reserva_id = 40
   AND espacio_id = 12;
 
+
+-- ============================================================
+-- CONSULTA 9 - DELETE
+-- Eliminar una tarifa que deja de ofrecerse
+-- ============================================================
+
 -- Pregunta de negocio:
--- ¿Cómo se elimina una tarifa que dejó de ofrecerse?
+-- ¿Cómo se elimina una combinación tarifaria que deja
+-- de formar parte de la oferta comercial?
 --
--- DELETE se utiliza porque esa combinación específica
--- deja de estar disponible comercialmente.
+-- Justificación:
+-- DELETE es apropiado porque se elimina una combinación
+-- completa de sede, tipo de espacio y modalidad.
 
 DELETE FROM tarifa
 WHERE sede_id = 3
-  AND tipo_espacio_id = 2
+  AND tipo_id = 2
   AND modalidad_id = 1;
-
