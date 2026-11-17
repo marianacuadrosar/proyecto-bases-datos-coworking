@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block titulo %}Cliente {{ cliente.cliente_id }}{% endblock %}
+{% block contenido %}
+{% set natural = cliente.tipo_cliente == 'NATURAL' %}
+<h1>Cliente {{ cliente.cliente_id }} ·
+  {% if natural %}{{ cliente.nombres }} {{ cliente.apellidos }}{% else %}{{ cliente.razon_social }}{% endif %}</h1>
+
+<dl class="ficha">
+  <dt>Tipo</dt><dd>{{ 'Persona natural' if natural else 'Empresa' }}</dd>
+  {% if natural %}
+    <dt>Documento</dt><dd>{{ cliente.documento }}</dd>
+    <dt>Fecha de nacimiento</dt><dd>{{ cliente.fecha_nacimiento }}</dd>
+  {% else %}
+    <dt>NIT</dt><dd>{{ cliente.nit }}</dd>
+  {% endif %}
+  <dt>Registrado desde</dt><dd>{{ cliente.fecha_registro }}</dd>
+  <dt>Teléfonos</dt><dd>{{ telefonos|join(', ') }}</dd>
+</dl>
+
+<h2>Editar</h2>
+<form class="formulario" method="post" action="{{ url_for('cliente_editar', cliente_id=cliente.cliente_id) }}">
+  <input type="hidden" name="tipo_cliente" value="{{ cliente.tipo_cliente }}">
+  <label>Email <input name="email" type="email" maxlength="100" value="{{ cliente.email }}" required></label>
+  {% if natural %}
+    <label>Nombres <input name="nombres" maxlength="60" value="{{ cliente.nombres }}" required></label>
+    <label>Apellidos <input name="apellidos" maxlength="60" value="{{ cliente.apellidos }}" required></label>
+  {% else %}
+    <label>Razón social <input name="razon_social" maxlength="120" value="{{ cliente.razon_social }}" required></label>
+    <label>Nombre de contacto <input name="nombre_contacto" maxlength="100" value="{{ cliente.nombre_contacto }}" required></label>
+  {% endif %}
+  <label>Agregar teléfono (opcional) <input name="telefono_nuevo" maxlength="10"></label>
+  <button>Guardar cambios</button>
+</form>
+
+<h2>Reservas</h2>
+{% if reservas %}
+  {% include "_tabla_reservas.html" %}
+{% else %}
+  <p class="nota">Este cliente no tiene reservas.</p>
+{% endif %}
+
+<form method="post" action="{{ url_for('cliente_eliminar', cliente_id=cliente.cliente_id) }}"
+      onsubmit="return confirm('¿Eliminar este cliente? No se puede deshacer.');">
+  <button class="peligro">Eliminar cliente</button>
+  <span class="nota">Solo se puede eliminar un cliente sin reservas.</span>
+</form>
+{% endblock %}

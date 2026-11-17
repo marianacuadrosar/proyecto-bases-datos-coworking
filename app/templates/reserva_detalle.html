@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block titulo %}Reserva {{ r.reserva_id }}{% endblock %}
+{% block contenido %}
+<h1>Reserva {{ r.reserva_id }} <span class="estado {{ r.estado|lower }}">{{ r.estado }}</span></h1>
+
+<dl class="ficha">
+  <dt>Cliente</dt><dd><a href="{{ url_for('cliente_detalle', cliente_id=r.cliente_id) }}">{{ r.cliente }}</a></dd>
+  <dt>Creada</dt><dd>{{ r.fecha_creacion }}</dd>
+  <dt>Modalidad</dt><dd>{{ r.modalidad }}</dd>
+  <dt>Sede</dt><dd>{{ r.sede or '' }} ({{ r.ciudad or '' }})</dd>
+  <dt>Valor total</dt><dd>{{ r.valor_total|dinero }}</dd>
+  <dt>Pagado</dt><dd>{{ r.pagado|dinero }}</dd>
+  <dt>Saldo</dt><dd>{{ r.saldo|dinero }}</dd>
+</dl>
+
+<h2>Espacios</h2>
+<table>
+  <thead><tr><th>N.°</th><th>Código</th><th>Tipo</th><th>Capacidad</th><th>Inicio</th><th>Fin</th>
+             <th class="num">Tarifa aplicada</th><th class="num">Subtotal</th></tr></thead>
+  <tbody>
+    {% for e in espacios %}
+    <tr><td>{{ e.espacio_id }}</td><td>{{ e.codigo }}</td><td>{{ e.tipo }}</td><td>{{ e.capacidad }}</td>
+        <td>{{ e.inicio }}</td><td>{{ e.fin }}</td>
+        <td class="num">{{ e.tarifa_aplicada|dinero }}</td><td class="num">{{ e.subtotal|dinero }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Cuotas</h2>
+<table>
+  <thead><tr><th>Cuota</th><th class="num">Monto</th><th>Pagada el</th><th>Método</th><th></th></tr></thead>
+  <tbody>
+    {% for c in cuotas %}
+    <tr>
+      <td>{{ c.num_cuota }}</td><td class="num">{{ c.monto|dinero }}</td>
+      <td>{{ c.fecha_pago or 'Pendiente' }}</td><td>{{ c.metodo_pago or '' }}</td>
+      <td>
+        {% if not c.fecha_pago and r.estado != 'CANCELADA' %}
+        <form class="en-linea" method="post" action="{{ url_for('reserva_pagar', reserva_id=r.reserva_id) }}">
+          <input type="hidden" name="num_cuota" value="{{ c.num_cuota }}">
+          <select name="metodo_pago" required>
+            <option value="">Método…</option>
+            {% for m in metodos %}<option>{{ m }}</option>{% endfor %}
+          </select>
+          <button>Registrar pago</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="nota">Sin cuotas.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if r.estado in ['PENDIENTE', 'CONFIRMADA'] %}
+<h2>Acciones</h2>
+<div class="acciones">
+  {% for nuevo in ['CONFIRMADA', 'FINALIZADA', 'CANCELADA'] if nuevo != r.estado %}
+  <form method="post" action="{{ url_for('reserva_estado', reserva_id=r.reserva_id) }}"
+        {% if nuevo == 'CANCELADA' %}onsubmit="return confirm('¿Cancelar la reserva? Se borran las cuotas sin pagar.');"{% endif %}>
+    <input type="hidden" name="estado" value="{{ nuevo }}">
+    <button {% if nuevo == 'CANCELADA' %}class="peligro"{% endif %}>Marcar {{ nuevo|lower }}</button>
+  </form>
+  {% endfor %}
+  <form method="post" action="{{ url_for('reserva_eliminar', reserva_id=r.reserva_id) }}"
+        onsubmit="return confirm('¿Eliminar la reserva? No se puede deshacer.');">
+    <button class="peligro">Eliminar</button>
+  </form>
+</div>
+<p class="nota">Solo se puede eliminar una reserva sin pagos; si ya tiene pagos, se cancela.</p>
+{% endif %}
+{% endblock %}

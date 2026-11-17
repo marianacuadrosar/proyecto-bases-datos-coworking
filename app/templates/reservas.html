@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block titulo %}Reservas{% endblock %}
+{% block contenido %}
+<h1>Reservas</h1>
+
+<form class="filtros" method="get">
+  <label>Estado
+    <select name="estado">
+      <option value="">Todos</option>
+      {% for e in estados %}
+        <option value="{{ e }}" {% if e == estado %}selected{% endif %}>{{ e }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button>Filtrar</button>
+  <a class="boton" href="{{ url_for('reserva_nueva') }}">Nueva reserva</a>
+</form>
+
+<p class="nota">Se muestran las {{ reservas|length }} reservas más recientes{% if estado %} en estado {{ estado }}{% endif %}.</p>
+{% include "_tabla_reservas.html" %}
+{% endblock %}

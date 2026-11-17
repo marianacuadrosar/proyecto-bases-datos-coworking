@@ -1,0 +1,18 @@
+<table>
+  <thead>
+    <tr><th>N.°</th><th>Estado</th><th>Cliente</th><th>Modalidad</th><th>Sede</th><th>Inicio</th>
+        <th class="num">Espacios</th><th class="num">Valor</th><th class="num">Pagado</th><th class="num">Saldo</th></tr>
+  </thead>
+  <tbody>
+    {% for r in reservas %}
+    <tr>
+      <td><a href="{{ url_for('reserva_detalle', reserva_id=r.reserva_id) }}">{{ r.reserva_id }}</a></td>
+      <td><span class="estado {{ r.estado|lower }}">{{ r.estado }}</span></td>
+      <td>{{ r.cliente }}</td><td>{{ r.modalidad }}</td><td>{{ r.sede or '' }}</td>
+      <td>{{ r.inicio or '' }}</td><td class="num">{{ r.espacios }}</td>
+      <td class="num">{{ r.valor_total|dinero }}</td><td class="num">{{ r.pagado|dinero }}</td>
+      <td class="num">{{ r.saldo|dinero }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

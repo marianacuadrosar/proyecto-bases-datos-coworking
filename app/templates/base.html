@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Coworking{% endblock %} · Red de Coworking</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+</head>
+<body>
+  <header>
+    <a class="marca" href="{{ url_for('inicio') }}">Red de Coworking</a>
+    <nav>
+      <a href="{{ url_for('reservas') }}">Reservas</a>
+      <a href="{{ url_for('reserva_nueva') }}">Nueva reserva</a>
+      <a href="{{ url_for('clientes') }}">Clientes</a>
+      <a href="{{ url_for('cliente_nuevo') }}">Nuevo cliente</a>
+      <a href="{{ url_for('espacios') }}">Espacios</a>
+    </nav>
+  </header>
+
+  <main>
+    {% with mensajes = get_flashed_messages(with_categories=true) %}
+      {% for categoria, mensaje in mensajes %}
+        <p class="aviso {{ categoria }}">{{ mensaje }}</p>
+      {% endfor %}
+    {% endwith %}
+
+    {% block contenido %}{% endblock %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block titulo %}Espacios{% endblock %}
+{% block contenido %}
+<h1>Catálogo de espacios</h1>
+
+<form class="filtros" method="get">
+  <label>Ciudad
+    <select name="ciudad">
+      <option value="">Todas</option>
+      {% for c in ciudades %}
+        <option value="{{ c }}" {% if c == ciudad %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Tipo
+    <select name="tipo_id">
+      <option value="">Todos</option>
+      {% for t in tipos %}
+        <option value="{{ t.tipo_id }}" {% if t.tipo_id == tipo_id %}selected{% endif %}>{{ t.nombre }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button>Filtrar</button>
+</form>
+
+<p class="nota">{{ espacios|length }} espacios. Un precio vacío significa que la sede no ofrece esa modalidad.</p>
+
+<table>
+  <thead>
+    <tr><th>N.°</th><th>Código</th><th>Tipo</th><th>Capacidad</th><th>Sede</th><th>Ciudad</th>
+        <th>Horario</th><th class="num">Precio hora</th><th class="num">Precio día</th></tr>
+  </thead>
+  <tbody>
+    {% for e in espacios %}
+    <tr>
+      <td>{{ e.espacio_id }}</td><td>{{ e.codigo }}</td><td>{{ e.tipo }}</td><td>{{ e.capacidad }}</td>
+      <td>{{ e.sede }}</td><td>{{ e.ciudad }}</td>
+      <td>{{ e.hora_apertura|hora }} a {{ e.hora_cierre|hora }}</td>
+      <td class="num">{{ e.precio_hora|dinero }}</td><td class="num">{{ e.precio_dia|dinero }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block titulo %}Nueva reserva{% endblock %}
+{% block contenido %}
+<h1>Nueva reserva</h1>
+<p class="nota">Se guarda en una sola transacción: la reserva, sus espacios y sus cuotas.
+Si un espacio está ocupado o algo falla, se hace ROLLBACK y no se guarda nada.</p>
+
+<form class="filtros" method="get">
+  <label>1. Ciudad de la sede
+    <select name="ciudad" onchange="this.form.submit()">
+      <option value="">Seleccione…</option>
+      {% for c in ciudades %}
+        <option value="{{ c }}" {% if c == ciudad %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <noscript><button>Ver espacios</button></noscript>
+</form>
+
+{% if ciudad %}
+<form class="formulario" method="post">
+  <input type="hidden" name="ciudad" value="{{ ciudad }}">
+
+  <fieldset>
+    <legend>2. Cliente y modalidad</legend>
+    <label>Cliente
+      <select name="cliente_id" required>
+        <option value="">Seleccione…</option>
+        {% for c in clientes %}
+          <option value="{{ c.cliente_id }}" {% if datos.cliente_id == c.cliente_id|string %}selected{% endif %}>
+            {{ c.nombre }} ({{ c.cliente_id }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Modalidad
+      <select name="modalidad_id" required>
+        {% for m in modalidades %}
+          <option value="{{ m.modalidad_id }}" {% if datos.modalidad_id == m.modalidad_id|string %}selected{% endif %}>
+            {{ 'Por hora' if m.nombre == 'Hora' else 'Por día (horario completo de la sede)' }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>3. Fecha y horario</legend>
+    <label>Fecha <input name="fecha" type="date" value="{{ datos.fecha or '' }}" required></label>
+    <label>Hora de inicio (solo por hora) <input name="hora_inicio" type="time" value="{{ datos.hora_inicio or '' }}"></label>
+    <label>Hora de fin (solo por hora) <input name="hora_fin" type="time" value="{{ datos.hora_fin or '' }}"></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>4. Espacios (todos de la misma sede)</legend>
+    {% for i in [1, 2, 3] %}
+    {% set campo = 'espacio_' ~ i %}
+    <label>Espacio {{ i }}{% if i > 1 %} (opcional){% endif %}
+      <select name="{{ campo }}" {% if i == 1 %}required{% endif %}>
+        <option value="">{{ 'Seleccione…' if i == 1 else 'Ninguno' }}</option>
+        {% for e in espacios %}
+          <option value="{{ e.espacio_id }}" {% if datos[campo] == e.espacio_id|string %}selected{% endif %}>
+            {{ e.sede }} · {{ e.codigo }} · {{ e.tipo }} ({{ e.capacidad }} pers.) ·
+            hora {{ e.precio_hora|dinero or 'no' }} / día {{ e.precio_dia|dinero or 'no' }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% endfor %}
+  </fieldset>
+
+  <fieldset>
+    <legend>5. Anticipo (opcional)</legend>
+    <label>Valor del anticipo <input name="anticipo" type="number" min="0" step="100" value="{{ datos.anticipo or '' }}"></label>
+    <label>Método de pago
+      <select name="metodo_pago">
+        <option value="">Sin anticipo</option>
+        {% for m in metodos %}
+          <option value="{{ m }}" {% if datos.metodo_pago == m %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <p class="nota">Con anticipo la reserva queda CONFIRMADA y el saldo queda como cuota 2.
+    Sin anticipo queda PENDIENTE con una cuota por el total.</p>
+  </fieldset>
+
+  <button>Crear reserva</button>
+</form>
+{% endif %}
+{% endblock %}
