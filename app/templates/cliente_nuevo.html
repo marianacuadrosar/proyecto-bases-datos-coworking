@@ -2,7 +2,7 @@
 {% block titulo %}Nuevo cliente{% endblock %}
 {% block contenido %}
 <h1>Nuevo cliente</h1>
-<p class="nota">Se guarda en una sola transacción: el cliente, sus datos de persona o empresa y su teléfono.
+<p class="nota">Se guarda en una sola transacción: el cliente, sus datos de persona o empresa y sus teléfonos.
 Si algo falla, no se guarda nada.</p>
 
 <form class="formulario" method="post">
@@ -17,6 +17,7 @@ Si algo falla, no se guarda nada.</p>
     </label>
     <label>Email <input name="email" type="email" maxlength="100" value="{{ datos.email or '' }}" required></label>
     <label>Teléfono <input name="telefono" maxlength="10" value="{{ datos.telefono or '' }}" placeholder="3001234567" required></label>
+    <label>Otro teléfono (opcional) <input name="telefono_2" maxlength="10" value="{{ datos.telefono_2 or '' }}" placeholder="6017654321"></label>
   </fieldset>
 
   <fieldset>

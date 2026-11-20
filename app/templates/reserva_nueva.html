@@ -6,23 +6,33 @@
 Si un espacio está ocupado o algo falla, se hace ROLLBACK y no se guarda nada.</p>
 
 <form class="filtros" method="get">
-  <label>1. Ciudad de la sede
-    <select name="ciudad" onchange="this.form.submit()">
+  <label>1. Ciudad
+    <select name="ciudad" onchange="this.form.sede_id.value=''; this.form.submit()">
       <option value="">Seleccione…</option>
       {% for c in ciudades %}
         <option value="{{ c }}" {% if c == ciudad %}selected{% endif %}>{{ c }}</option>
       {% endfor %}
     </select>
   </label>
-  <noscript><button>Ver espacios</button></noscript>
+  <label>2. Sede
+    <select name="sede_id" onchange="this.form.submit()" {% if not ciudad %}disabled{% endif %}>
+      <option value="">Seleccione…</option>
+      {% for s in sedes %}
+        <option value="{{ s.sede_id }}" {% if s.sede_id == sede_id %}selected{% endif %}>
+          {{ s.sede }} ({{ s.hora_apertura|hora }} a {{ s.hora_cierre|hora }})</option>
+      {% endfor %}
+    </select>
+  </label>
+  <noscript><button>Continuar</button></noscript>
 </form>
 
-{% if ciudad %}
+{% if espacios %}
 <form class="formulario" method="post">
   <input type="hidden" name="ciudad" value="{{ ciudad }}">
+  <input type="hidden" name="sede_id" value="{{ sede_id }}">
 
   <fieldset>
-    <legend>2. Cliente y modalidad</legend>
+    <legend>3. Cliente y modalidad</legend>
     <label>Cliente
       <select name="cliente_id" required>
         <option value="">Seleccione…</option>
@@ -43,45 +53,48 @@ Si un espacio está ocupado o algo falla, se hace ROLLBACK y no se guarda nada.<
   </fieldset>
 
   <fieldset>
-    <legend>3. Fecha y horario</legend>
+    <legend>4. Fecha y horario</legend>
     <label>Fecha <input name="fecha" type="date" value="{{ datos.fecha or '' }}" required></label>
     <label>Hora de inicio (solo por hora) <input name="hora_inicio" type="time" value="{{ datos.hora_inicio or '' }}"></label>
     <label>Hora de fin (solo por hora) <input name="hora_fin" type="time" value="{{ datos.hora_fin or '' }}"></label>
   </fieldset>
 
-  <fieldset>
-    <legend>4. Espacios (todos de la misma sede)</legend>
-    {% for i in [1, 2, 3] %}
-    {% set campo = 'espacio_' ~ i %}
-    <label>Espacio {{ i }}{% if i > 1 %} (opcional){% endif %}
-      <select name="{{ campo }}" {% if i == 1 %}required{% endif %}>
-        <option value="">{{ 'Seleccione…' if i == 1 else 'Ninguno' }}</option>
-        {% for e in espacios %}
-          <option value="{{ e.espacio_id }}" {% if datos[campo] == e.espacio_id|string %}selected{% endif %}>
-            {{ e.sede }} · {{ e.codigo }} · {{ e.tipo }} ({{ e.capacidad }} pers.) ·
-            hora {{ e.precio_hora|dinero or 'no' }} / día {{ e.precio_dia|dinero or 'no' }}</option>
-        {% endfor %}
-      </select>
+  <fieldset class="lista-espacios">
+    <legend>5. Espacios (marque uno o varios)</legend>
+    {% for e in espacios %}
+    <label class="opcion">
+      <input type="checkbox" name="espacios" value="{{ e.espacio_id }}"
+             {% if e.espacio_id|string in marcados %}checked{% endif %}>
+      <span><strong>{{ e.codigo }}</strong> · {{ e.tipo }} · {{ e.capacidad }} pers.<br>
+        <small>hora {{ e.precio_hora|dinero or 'no se ofrece' }} · día {{ e.precio_dia|dinero or 'no se ofrece' }}</small></span>
     </label>
     {% endfor %}
   </fieldset>
 
   <fieldset>
-    <legend>5. Anticipo (opcional)</legend>
-    <label>Valor del anticipo <input name="anticipo" type="number" min="0" step="100" value="{{ datos.anticipo or '' }}"></label>
-    <label>Método de pago
+    <legend>6. Pago</legend>
+    <label>Número de cuotas
+      <select name="num_cuotas">
+        {% for n in ['1', '2', '3'] %}
+          <option value="{{ n }}" {% if datos.num_cuotas == n %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Pagar la cuota 1 ahora con
       <select name="metodo_pago">
-        <option value="">Sin anticipo</option>
+        <option value="">No pagar todavía</option>
         {% for m in metodos %}
           <option value="{{ m }}" {% if datos.metodo_pago == m %}selected{% endif %}>{{ m }}</option>
         {% endfor %}
       </select>
     </label>
-    <p class="nota">Con anticipo la reserva queda CONFIRMADA y el saldo queda como cuota 2.
-    Sin anticipo queda PENDIENTE con una cuota por el total.</p>
+    <p class="nota">El valor se divide en cuotas iguales. Si se paga la cuota 1, la reserva queda CONFIRMADA;
+    si no, queda PENDIENTE.</p>
   </fieldset>
 
   <button>Crear reserva</button>
 </form>
+{% elif ciudad and sede_id %}
+<p class="nota">Esta sede no tiene espacios.</p>
 {% endif %}
 {% endblock %}

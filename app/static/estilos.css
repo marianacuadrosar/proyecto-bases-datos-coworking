@@ -98,3 +98,8 @@ button.peligro { background: var(--peligro); border-color: var(--peligro); }
   table { display: block; overflow-x: auto; }
   header { padding: 0.8rem 1rem; }
 }
+
+.lista-espacios .opcion { flex-direction: row; align-items: flex-start; gap: 0.5rem;
+                          padding: 0.5rem; border: 1px solid var(--borde); border-radius: 6px; }
+.lista-espacios .opcion input { margin-top: 0.25rem; }
+.lista-espacios small { color: var(--suave); }

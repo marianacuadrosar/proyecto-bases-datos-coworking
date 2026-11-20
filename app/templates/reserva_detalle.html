@@ -28,27 +28,15 @@
 
 <h2>Cuotas</h2>
 <table>
-  <thead><tr><th>Cuota</th><th class="num">Monto</th><th>Pagada el</th><th>Método</th><th></th></tr></thead>
+  <thead><tr><th>Cuota</th><th class="num">Monto</th><th>Pagada el</th><th>Método</th></tr></thead>
   <tbody>
     {% for c in cuotas %}
     <tr>
       <td>{{ c.num_cuota }}</td><td class="num">{{ c.monto|dinero }}</td>
       <td>{{ c.fecha_pago or 'Pendiente' }}</td><td>{{ c.metodo_pago or '' }}</td>
-      <td>
-        {% if not c.fecha_pago and r.estado != 'CANCELADA' %}
-        <form class="en-linea" method="post" action="{{ url_for('reserva_pagar', reserva_id=r.reserva_id) }}">
-          <input type="hidden" name="num_cuota" value="{{ c.num_cuota }}">
-          <select name="metodo_pago" required>
-            <option value="">Método…</option>
-            {% for m in metodos %}<option>{{ m }}</option>{% endfor %}
-          </select>
-          <button>Registrar pago</button>
-        </form>
-        {% endif %}
-      </td>
     </tr>
     {% else %}
-    <tr><td colspan="5" class="nota">Sin cuotas.</td></tr>
+    <tr><td colspan="4" class="nota">Sin cuotas.</td></tr>
     {% endfor %}
   </tbody>
 </table>
@@ -56,18 +44,33 @@
 {% if r.estado in ['PENDIENTE', 'CONFIRMADA'] %}
 <h2>Acciones</h2>
 <div class="acciones">
-  {% for nuevo in ['CONFIRMADA', 'FINALIZADA', 'CANCELADA'] if nuevo != r.estado %}
-  <form method="post" action="{{ url_for('reserva_estado', reserva_id=r.reserva_id) }}"
-        {% if nuevo == 'CANCELADA' %}onsubmit="return confirm('¿Cancelar la reserva? Se borran las cuotas sin pagar.');"{% endif %}>
-    <input type="hidden" name="estado" value="{{ nuevo }}">
-    <button {% if nuevo == 'CANCELADA' %}class="peligro"{% endif %}>Marcar {{ nuevo|lower }}</button>
+  {% if r.saldo > 0 %}
+  <form class="en-linea" method="post" action="{{ url_for('reserva_pagar', reserva_id=r.reserva_id) }}">
+    <select name="metodo_pago" required>
+      <option value="">Método de pago…</option>
+      {% for m in metodos %}<option>{{ m }}</option>{% endfor %}
+    </select>
+    <button>Pagar la siguiente cuota</button>
   </form>
-  {% endfor %}
+  {% endif %}
+
+  {% if r.estado == 'CONFIRMADA' %}
+  <form method="post" action="{{ url_for('reserva_finalizar', reserva_id=r.reserva_id) }}">
+    <button>Finalizar</button>
+  </form>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('reserva_cancelar', reserva_id=r.reserva_id) }}"
+        onsubmit="return confirm('¿Cancelar la reserva? Sus espacios quedarán libres.');">
+    <button class="peligro">Cancelar</button>
+  </form>
+
   <form method="post" action="{{ url_for('reserva_eliminar', reserva_id=r.reserva_id) }}"
         onsubmit="return confirm('¿Eliminar la reserva? No se puede deshacer.');">
     <button class="peligro">Eliminar</button>
   </form>
 </div>
-<p class="nota">Solo se puede eliminar una reserva sin pagos; si ya tiene pagos, se cancela.</p>
+<p class="nota">Pagar la primera cuota confirma la reserva. Solo se finaliza una reserva pagada por completo.
+Una reserva con pagos no se puede cancelar ni eliminar.</p>
 {% endif %}
 {% endblock %}

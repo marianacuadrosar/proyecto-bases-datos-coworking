@@ -9,8 +9,14 @@ Cada página sigue el mismo patrón:
      toca la base de datos);
   3. llama un procedimiento almacenado con db.llamar();
   4. muestra el resultado o el mensaje de error de la base de datos.
+
+Las operaciones con transacción usan los procedimientos del núcleo
+(sql/07_procedimientos_funciones.sql): sp_registrar_cliente,
+sp_crear_reserva, sp_registrar_pago y sp_cancelar_reserva. El resto
+usa los procedimientos sp_app_ de sql/11_procedimientos_app.sql.
 """
 
+import json
 import os
 
 from flask import Flask, flash, redirect, render_template, request, url_for
@@ -53,6 +59,13 @@ def mostrar_errores(errores):
         flash(error, "error")
 
 
+def entero_o_nada(valor):
+    try:
+        return v.entero_opcional(valor)
+    except ValueError:
+        return None
+
+
 @app.errorhandler(ErrorBD)
 def error_de_base_de_datos(error):
     """Si una consulta de solo lectura falla, se muestra en la página de inicio."""
@@ -73,11 +86,8 @@ def inicio():
 def espacios():
     _, tipos, ciudades = catalogos()
     ciudad = request.args.get("ciudad") or None
-    try:
-        tipo_id = v.entero_opcional(request.args.get("tipo_id"))
-    except ValueError:
-        tipo_id = None
-    tablas, _ = llamar("sp_app_listar_espacios", ciudad, tipo_id)
+    tipo_id = entero_o_nada(request.args.get("tipo_id"))
+    tablas, _ = llamar("sp_app_listar_espacios", ciudad, None, tipo_id)
     return render_template("espacios.html", espacios=tablas[0], ciudades=ciudades,
                            tipos=tipos, ciudad=ciudad, tipo_id=tipo_id)
 
@@ -103,9 +113,10 @@ def cliente_nuevo():
         else:
             natural = datos["tipo_cliente"] == "NATURAL"
             try:
+                # Transacción del núcleo: cliente + subclase + teléfonos
                 _, salida = llamar(
-                    "sp_app_registrar_cliente",
-                    datos["tipo_cliente"], v.texto(datos, "email"), v.texto(datos, "telefono"),
+                    "sp_registrar_cliente",
+                    datos["tipo_cliente"], v.texto(datos, "email"),
                     v.texto(datos, "documento") if natural else None,
                     v.texto(datos, "nombres") if natural else None,
                     v.texto(datos, "apellidos") if natural else None,
@@ -113,6 +124,7 @@ def cliente_nuevo():
                     None if natural else v.texto(datos, "nit"),
                     None if natural else v.texto(datos, "razon_social"),
                     None if natural else v.texto(datos, "nombre_contacto"),
+                    json.dumps(v.telefonos(datos)),
                     None,  # OUT p_cliente_id
                 )
                 cliente_id = salida[-1]
@@ -181,29 +193,37 @@ def reservas():
 def reserva_nueva():
     modalidades, _, ciudades = catalogos()
     datos = request.values
-    # Primero se elige la ciudad; con ella se llenan las listas de espacios.
+
+    # Paso 1: ciudad. Paso 2: sede de esa ciudad. Paso 3: el formulario
+    # con los espacios de esa sede.
     ciudad = datos.get("ciudad") or None
-    lista_espacios = llamar("sp_app_listar_espacios", ciudad, None)[0][0] if ciudad else []
-    lista_clientes = llamar("sp_app_listar_clientes", "")[0][0]
+    sede_id = entero_o_nada(datos.get("sede_id"))
+    sedes, espacios_sede = [], []
+    if ciudad:
+        de_la_ciudad = llamar("sp_app_listar_espacios", ciudad, None, None)[0][0]
+        sedes = list({e["sede_id"]: e for e in de_la_ciudad}.values())
+        espacios_sede = [e for e in de_la_ciudad if e["sede_id"] == sede_id]
+    lista_clientes = llamar("sp_app_listar_clientes", "")[0][0] if espacios_sede else []
+    marcados = datos.getlist("espacios")
 
     if request.method == "POST":
         nombres = {str(m["modalidad_id"]): m["nombre"] for m in modalidades}
         modalidad = nombres.get(datos.get("modalidad_id"), "")
-        errores = v.validar_reserva(datos, modalidad)
+        errores = v.validar_reserva(datos, marcados, modalidad)
         if errores:
             mostrar_errores(errores)
         else:
             por_hora = modalidad == "Hora"
             try:
+                # Transacción del núcleo: reserva + espacios + cuotas
                 _, salida = llamar(
-                    "sp_app_crear_reserva",
-                    int(datos["cliente_id"]), int(datos["modalidad_id"]), v.texto(datos, "fecha"),
+                    "sp_crear_reserva",
+                    int(datos["cliente_id"]), int(datos["modalidad_id"]),
+                    json.dumps([int(e) for e in marcados]),
+                    v.texto(datos, "fecha"),
                     v.texto(datos, "hora_inicio") if por_hora else None,
                     v.texto(datos, "hora_fin") if por_hora else None,
-                    v.entero_opcional(datos.get("espacio_1")),
-                    v.entero_opcional(datos.get("espacio_2")),
-                    v.entero_opcional(datos.get("espacio_3")),
-                    float(v.texto(datos, "anticipo") or 0),
+                    int(datos["num_cuotas"]),
                     v.texto(datos, "metodo_pago") or None,
                     None,  # OUT p_reserva_id
                 )
@@ -214,7 +234,8 @@ def reserva_nueva():
                 flash(str(error), "error")
 
     return render_template("reserva_nueva.html", datos=datos, ciudad=ciudad, ciudades=ciudades,
-                           modalidades=modalidades, espacios=lista_espacios,
+                           sedes=sedes, sede_id=sede_id, espacios=espacios_sede,
+                           marcados=marcados, modalidades=modalidades,
                            clientes=lista_clientes, metodos=v.METODOS_PAGO)
 
 
@@ -237,19 +258,29 @@ def reserva_pagar(reserva_id):
         flash("Seleccione el método de pago.", "error")
     else:
         try:
-            llamar("sp_app_pagar_cuota", reserva_id, int(request.form["num_cuota"]), metodo)
-            flash("Pago registrado.", "ok")
+            # Transacción del núcleo: paga la siguiente cuota y confirma
+            _, salida = llamar("sp_registrar_pago", reserva_id, metodo, None, None)
+            flash(f"Se pagó la cuota {salida[2]} por {dinero(salida[3])}.", "ok")
         except ErrorBD as error:
             flash(str(error), "error")
     return redirect(url_for("reserva_detalle", reserva_id=reserva_id))
 
 
-@app.route("/reservas/<int:reserva_id>/estado", methods=["POST"])
-def reserva_estado(reserva_id):
-    nuevo = request.form.get("estado", "")
+@app.route("/reservas/<int:reserva_id>/cancelar", methods=["POST"])
+def reserva_cancelar(reserva_id):
     try:
-        llamar("sp_app_cambiar_estado", reserva_id, nuevo)
-        flash(f"La reserva quedó {nuevo}.", "ok")
+        llamar("sp_cancelar_reserva", reserva_id)
+        flash(f"Reserva {reserva_id} cancelada. Sus espacios quedan libres.", "ok")
+    except ErrorBD as error:
+        flash(str(error), "error")
+    return redirect(url_for("reserva_detalle", reserva_id=reserva_id))
+
+
+@app.route("/reservas/<int:reserva_id>/finalizar", methods=["POST"])
+def reserva_finalizar(reserva_id):
+    try:
+        llamar("sp_app_finalizar_reserva", reserva_id)
+        flash(f"Reserva {reserva_id} finalizada.", "ok")
     except ErrorBD as error:
         flash(str(error), "error")
     return redirect(url_for("reserva_detalle", reserva_id=reserva_id))

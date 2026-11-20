@@ -17,7 +17,7 @@ METODOS_PAGO = ["Efectivo", "Nequi", "PSE", "Tarjeta de crédito",
                 "Tarjeta débito", "Transferencia"]
 
 PATRON_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[a-zA-Z]{2,}$")
-PATRON_TELEFONO = re.compile(r"^\d{7,10}$")
+PATRON_TELEFONO = re.compile(r"^(\d{7}|\d{10})$")
 PATRON_DOCUMENTO = re.compile(r"^\d{6,10}$")
 PATRON_NIT = re.compile(r"^\d{9}-\d$")
 
@@ -45,7 +45,7 @@ def validar_telefono(telefono, obligatorio=True):
     if not telefono:
         return ["El teléfono es obligatorio."] if obligatorio else []
     if not PATRON_TELEFONO.match(telefono):
-        return ["El teléfono debe tener entre 7 y 10 dígitos, sin espacios."]
+        return ["El teléfono debe tener 7 dígitos (fijo) o 10 (celular), sin espacios."]
     return []
 
 
@@ -58,6 +58,7 @@ def validar_cliente(datos):
 
     errores += validar_email(texto(datos, "email"))
     errores += validar_telefono(texto(datos, "telefono"))
+    errores += validar_telefono(texto(datos, "telefono_2"), obligatorio=False)
 
     if tipo == "NATURAL":
         if not PATRON_DOCUMENTO.match(texto(datos, "documento")):
@@ -110,8 +111,18 @@ def edad(nacimiento, hoy=None):
     return hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
 
 
-def validar_reserva(datos, nombre_modalidad, hoy=None):
-    """Formulario de reserva nueva. nombre_modalidad es 'Hora' o 'Dia'."""
+def telefonos(datos):
+    """Teléfonos del formulario de cliente nuevo, sin vacíos ni repetidos."""
+    lista = [texto(datos, "telefono"), texto(datos, "telefono_2")]
+    return list(dict.fromkeys(t for t in lista if t))
+
+
+def validar_reserva(datos, espacios, nombre_modalidad, hoy=None):
+    """Formulario de reserva nueva.
+
+    espacios es la lista de espacio_id marcados en el formulario y
+    nombre_modalidad es 'Hora' o 'Dia'.
+    """
     errores = []
     hoy = hoy or date.today()
 
@@ -140,29 +151,17 @@ def validar_reserva(datos, nombre_modalidad, hoy=None):
         except ValueError:
             errores.append("Por hora, indique hora de inicio y hora de fin (HH:MM).")
 
-    try:
-        espacios = [entero_opcional(datos.get(f"espacio_{i}")) for i in (1, 2, 3)]
-        elegidos = [e for e in espacios if e is not None]
-        if espacios[0] is None:
-            errores.append("Seleccione al menos el primer espacio.")
-        if len(elegidos) != len(set(elegidos)):
-            errores.append("No repita el mismo espacio en la reserva.")
-    except ValueError:
-        errores.append("Los espacios deben ser números de espacio válidos.")
+    if not espacios:
+        errores.append("Marque al menos un espacio.")
+    elif not all(str(e).isdigit() for e in espacios):
+        errores.append("Los espacios marcados no son válidos.")
+    elif len(espacios) != len(set(espacios)):
+        errores.append("No repita el mismo espacio en la reserva.")
 
-    errores += validar_anticipo(texto(datos, "anticipo"), texto(datos, "metodo_pago"))
+    if texto(datos, "num_cuotas") not in ("1", "2", "3"):
+        errores.append("El número de cuotas debe ser 1, 2 o 3.")
+
+    metodo = texto(datos, "metodo_pago")
+    if metodo and metodo not in METODOS_PAGO:
+        errores.append("El método de pago no es válido.")
     return errores
-
-
-def validar_anticipo(anticipo, metodo):
-    if not anticipo:
-        return []
-    try:
-        valor = float(anticipo)
-    except ValueError:
-        return ["El anticipo debe ser un número."]
-    if valor < 0:
-        return ["El anticipo no puede ser negativo."]
-    if valor > 0 and metodo not in METODOS_PAGO:
-        return ["Seleccione el método de pago del anticipo."]
-    return []
