@@ -3,16 +3,16 @@
 -- Caso 6: Red de espacios de coworking
 -- ============================================================
 --
--- Orden de ejecución: después de 01_ddl.sql y 02_datos_prueba.sql.
--- Se puede correr varias veces: las vistas usan CREATE OR REPLACE.
+-- Orden de ejecución: después de 07_procedimientos_funciones.sql, porque
+-- la vista de reservas usa sus funciones fn_valor_reserva y
+-- fn_saldo_pendiente. Se puede correr varias veces: las vistas usan
+-- CREATE OR REPLACE.
 --
 -- Las tres vistas no son solo para reportes: la aplicación web las
 -- consulta a través de los procedimientos de 11_procedimientos_app.sql.
 -- Así la lógica para armar un cliente, un espacio o una reserva queda
 -- escrita una sola vez, en la base de datos.
 --
--- Valor de una línea de reserva (la misma regla de 06_consultas_analisis.sql):
--- tarifa_aplicada x horas si la modalidad es Hora, o x 1 si es Dia.
 -- ============================================================
 
 SET NAMES utf8mb4;
@@ -140,18 +140,19 @@ ORDER BY precio_hora, capacidad DESC;
 --
 -- Justificación:
 -- valor_total es el atributo derivado del diagrama E/R: no se guarda
--- en ninguna tabla, se calcula con los espacios de la reserva. Esta
--- vista es el único lugar donde se escribe ese cálculo; la aplicación
--- y los reportes lo leen de aquí.
+-- en ninguna tabla. La vista no repite su fórmula: usa las funciones
+-- fn_valor_reserva y fn_saldo_pendiente de 07_procedimientos_funciones.sql,
+-- así el valor de una reserva se calcula igual en la vista, en los
+-- procedimientos y en los reportes. Una reserva cancelada no se cobra,
+-- por eso fn_saldo_pendiente le da saldo 0.
 --
--- Los espacios y las cuotas se agrupan por separado en dos
--- subconsultas y después se unen por reserva_id. Si se uniera
--- RESERVA_ESPACIO con CUOTA directamente, cada cuota se repetiría una
--- vez por espacio y lo pagado saldría multiplicado.
+-- La sede, el número de espacios y el horario se agrupan en una
+-- subconsulta y lo pagado en otra, y después se unen por reserva_id.
+-- Si se uniera RESERVA_ESPACIO con CUOTA directamente, cada cuota se
+-- repetiría una vez por espacio y lo pagado saldría multiplicado.
 --
 -- Las dos subconsultas van con LEFT JOIN para que una reserva sin
 -- espacios o sin pagos siga apareciendo, con 0 en vez de desaparecer.
--- Una reserva cancelada no se va a cobrar, por eso su saldo es 0.
 
 CREATE OR REPLACE VIEW vw_reserva_resumen AS
 SELECT
@@ -166,12 +167,9 @@ SELECT
     COALESCE(l.espacios, 0) AS espacios,
     l.inicio,
     l.fin,
-    COALESCE(l.valor_total, 0) AS valor_total,
+    COALESCE(fn_valor_reserva(r.reserva_id), 0) AS valor_total,
     COALESCE(q.pagado, 0) AS pagado,
-    CASE
-        WHEN r.estado = 'CANCELADA' THEN 0
-        ELSE COALESCE(l.valor_total, 0) - COALESCE(q.pagado, 0)
-    END AS saldo
+    fn_saldo_pendiente(r.reserva_id) AS saldo
 FROM reserva r
 INNER JOIN modalidad m       ON m.modalidad_id = r.modalidad_id
 LEFT JOIN persona_natural p  ON p.cliente_id   = r.cliente_id
@@ -182,15 +180,8 @@ LEFT JOIN (
            MIN(s.ciudad) AS ciudad,
            COUNT(*)      AS espacios,
            MIN(re.inicio) AS inicio,
-           MAX(re.fin)    AS fin,
-           ROUND(SUM(re.tarifa_aplicada *
-                 CASE WHEN mm.nombre = 'Hora'
-                      THEN TIMESTAMPDIFF(MINUTE, re.inicio, re.fin) / 60
-                      ELSE 1
-                 END), 2) AS valor_total
+           MAX(re.fin)    AS fin
     FROM reserva_espacio re
-    INNER JOIN reserva rr   ON rr.reserva_id   = re.reserva_id
-    INNER JOIN modalidad mm ON mm.modalidad_id = rr.modalidad_id
     INNER JOIN espacio e    ON e.espacio_id    = re.espacio_id
     INNER JOIN sede s       ON s.sede_id       = e.sede_id
     GROUP BY re.reserva_id
@@ -215,8 +206,8 @@ ORDER BY saldo DESC;
 -- ============================================================
 
 -- Pregunta de negocio:
--- ¿Qué movimientos tiene el cliente 2 (Tequendama Ingeniería S.A.S.):
--- cuánto se le ha cobrado por reservas y cuánto ha abonado?
+-- ¿Qué movimientos tuvo en 2026 el cliente 2 (Tequendama Ingeniería
+-- S.A.S.): cuánto se le cobró por reservas y cuánto abonó?
 --
 -- Justificación:
 -- Un estado de cuenta mezcla dos cosas que viven en tablas distintas:
@@ -241,6 +232,7 @@ SELECT r.fecha_creacion AS fecha,
 FROM vw_reserva_resumen r
 WHERE r.cliente_id = 2
   AND r.estado <> 'CANCELADA'
+  AND r.fecha_creacion >= '2026-01-01'
 
 UNION ALL
 
@@ -252,6 +244,7 @@ FROM cuota q
 INNER JOIN reserva r ON r.reserva_id = q.reserva_id
 WHERE r.cliente_id = 2
   AND r.estado <> 'CANCELADA'
+  AND r.fecha_creacion >= '2026-01-01'
   AND q.fecha_pago IS NOT NULL
 
 ORDER BY fecha, movimiento DESC;
