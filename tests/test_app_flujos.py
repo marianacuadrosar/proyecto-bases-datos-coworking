@@ -1,107 +1,138 @@
-"""Pruebas de integración de los flujos transaccionales.
+"""Pruebas de la aplicación web de punta a punta.
 
-Llaman los mismos procedimientos que usa la aplicación, contra la base
-coworking_db del archivo .env. Las reservas se crean en 2027 para no
-chocar con los datos de prueba.
+Usan el cliente de pruebas de Flask: envían los mismos formularios que
+llenaría el profesor en el navegador y revisan la página que responde
+y las filas de las tablas.
+
+Cada prueba trabaja sobre la base coworking_test, que el fixture db de
+conftest.py crea desde cero con 01, 02 y 07. Aquí se le agregan las
+vistas (10) y los procedimientos de la aplicación (11).
+
+Datos de partida (sql/02_datos_prueba.sql), Sede Chapinero (sede 1, Bogotá):
+    espacio 6  SR-01 sala de reuniones    68.500 por hora
+    espacio 1  EF-01 escritorio flexible  12.000 por hora
+    cliente 1  Andrés Patiño, documento 70719489
+    cliente 2  Tequendama Ingeniería S.A.S. (tiene reservas)
+Las reservas se hacen en marzo de 2027, que no tiene reservas.
 """
 
 import pytest
 
-from conftest import consultar, contar_filas
-from db import ErrorBD, llamar
+import app as aplicacion
+from conftest import RAIZ, _ejecutar_script, contar, fila
 
-FECHA = "2027-06-15"
+TABLAS = ("cliente", "persona_natural", "empresa", "telefono_cliente",
+          "reserva", "reserva_espacio", "cuota")
 
-
-def crear_reserva(cliente_id, modalidad_id, espacios, anticipo=0, metodo=None,
-                  hora_inicio="09:00", hora_fin="11:00"):
-    espacios = list(espacios) + [None] * (3 - len(espacios))
-    _, salida = llamar("sp_app_crear_reserva", cliente_id, modalidad_id, FECHA,
-                       hora_inicio, hora_fin, *espacios, anticipo, metodo, None)
-    return salida[-1]
-
-
-def test_crear_reserva_con_anticipo_guarda_las_tres_tablas(espacios_libres, modalidad_hora, limpiar):
-    e1, _ = espacios_libres
-    reserva_id = crear_reserva(1, modalidad_hora, [e1], anticipo=10000, metodo="Nequi")
-    limpiar["reservas"].append(reserva_id)
-
-    estado = consultar("SELECT estado FROM reserva WHERE reserva_id = %s", reserva_id)
-    espacios = consultar("SELECT COUNT(*) FROM reserva_espacio WHERE reserva_id = %s", reserva_id)
-    cuotas = consultar("SELECT num_cuota, fecha_pago IS NOT NULL FROM cuota "
-                       "WHERE reserva_id = %s ORDER BY num_cuota", reserva_id)
-
-    assert estado[0][0] == "CONFIRMADA"
-    assert espacios[0][0] == 1
-    assert cuotas == [(1, 1), (2, 0)]  # anticipo pagado y saldo pendiente
+RESERVA = {
+    "ciudad": "Bogotá", "sede_id": "1", "cliente_id": "2", "modalidad_id": "1",
+    "fecha": "2027-03-01", "hora_inicio": "09:00", "hora_fin": "12:00",
+    "espacios": ["6", "1"], "num_cuotas": "2", "metodo_pago": "Transferencia",
+}
 
 
-def test_rollback_reserva_con_espacio_ocupado_no_deja_cambios(espacios_libres, modalidad_hora, limpiar):
-    e1, e2 = espacios_libres
-    # Primero se ocupa e2 de 09:00 a 11:00.
-    limpiar["reservas"].append(crear_reserva(1, modalidad_hora, [e2]))
-    antes = contar_filas()
-
-    # La nueva reserva inserta RESERVA y el espacio e1 (libre) antes de
-    # descubrir que e2 se cruza de 10:00 a 12:00. El ROLLBACK debe
-    # deshacer esos dos INSERT.
-    with pytest.raises(ErrorBD, match="ya está reservado en ese horario"):
-        crear_reserva(1, modalidad_hora, [e1, e2], hora_inicio="10:00", hora_fin="12:00")
-
-    assert contar_filas() == antes
+@pytest.fixture
+def navegador(db, monkeypatch):
+    """Cliente de Flask conectado a coworking_test."""
+    for script in ("10_vistas_union.sql", "11_procedimientos_app.sql"):
+        _ejecutar_script(RAIZ / "sql" / script)
+    monkeypatch.setenv("DB_NAME", "coworking_test")
+    aplicacion.app.config["TESTING"] = True
+    return aplicacion.app.test_client()
 
 
-def test_rollback_anticipo_mayor_al_total(espacios_libres, modalidad_hora):
-    e1, _ = espacios_libres
-    antes = contar_filas()
-
-    with pytest.raises(ErrorBD, match="anticipo no puede superar"):
-        crear_reserva(1, modalidad_hora, [e1], anticipo=999999999, metodo="PSE")
-
-    assert contar_filas() == antes
+def texto(respuesta):
+    return respuesta.get_data(as_text=True)
 
 
-def test_rollback_cliente_con_documento_repetido_no_deja_cliente(bd):
-    documento_existente = consultar("SELECT documento FROM persona_natural LIMIT 1")[0][0]
-    antes = contar_filas()
-
-    # El INSERT en CLIENTE sí se ejecuta; el de PERSONA_NATURAL falla por
-    # el UNIQUE del documento y el ROLLBACK debe borrar el cliente.
-    with pytest.raises(ErrorBD, match="documento o NIT ya está registrado"):
-        llamar("sp_app_registrar_cliente", "NATURAL", "prueba.rollback@ejemplo.com", "3001112233",
-               documento_existente, "Prueba", "Rollback", "1990-01-01", None, None, None, None)
-
-    assert contar_filas() == antes
-    assert consultar("SELECT COUNT(*) FROM cliente WHERE email = 'prueba.rollback@ejemplo.com'")[0][0] == 0
+def test_paginas_de_consulta_responden(navegador):
+    for url in ("/", "/espacios?ciudad=Bogotá", "/clientes?buscar=gmail",
+                "/reservas?estado=CONFIRMADA", "/clientes/2", "/reservas/188",
+                "/reservas/nueva?ciudad=Bogotá&sede_id=1"):
+        assert navegador.get(url).status_code == 200, url
 
 
-def test_registrar_empresa_guarda_las_tres_tablas(limpiar):
-    _, salida = llamar("sp_app_registrar_cliente", "EMPRESA", "contacto@pruebaautomatica.co",
-                       "6015550000", None, None, None, None, "999888777-1",
-                       "Prueba Automática S.A.S.", "Ana Prueba", None)
-    cliente_id = salida[-1]
-    limpiar["clientes"].append(cliente_id)
+def test_crear_reserva_desde_la_app_guarda_las_tres_tablas(navegador, db):
+    antes = contar(db, *TABLAS)
 
-    assert consultar("SELECT tipo_cliente FROM cliente WHERE cliente_id = %s", cliente_id)[0][0] == "EMPRESA"
-    assert consultar("SELECT nit FROM empresa WHERE cliente_id = %s", cliente_id)[0][0] == "999888777-1"
-    assert consultar("SELECT COUNT(*) FROM telefono_cliente WHERE cliente_id = %s", cliente_id)[0][0] == 1
+    respuesta = navegador.post("/reservas/nueva", data=RESERVA, follow_redirects=True)
 
-
-def test_pagar_cuota_confirma_una_reserva_pendiente(espacios_libres, modalidad_hora, limpiar):
-    e1, _ = espacios_libres
-    reserva_id = crear_reserva(1, modalidad_hora, [e1])  # sin anticipo: PENDIENTE
-    limpiar["reservas"].append(reserva_id)
-
-    llamar("sp_app_pagar_cuota", reserva_id, 1, "Efectivo")
-
-    assert consultar("SELECT estado FROM reserva WHERE reserva_id = %s", reserva_id)[0][0] == "CONFIRMADA"
-    assert consultar("SELECT fecha_pago IS NOT NULL FROM cuota WHERE reserva_id = %s", reserva_id)[0][0] == 1
+    despues = contar(db, *TABLAS)
+    assert "creada" in texto(respuesta) and "CONFIRMADA" in texto(respuesta)
+    assert despues["reserva"] == antes["reserva"] + 1
+    assert despues["reserva_espacio"] == antes["reserva_espacio"] + 2
+    assert despues["cuota"] == antes["cuota"] + 2
 
 
-def test_no_se_elimina_un_cliente_con_reservas(bd):
-    cliente_con_reservas = consultar("SELECT cliente_id FROM reserva LIMIT 1")[0][0]
+def test_rollback_reserva_con_cruce_muestra_el_mensaje_y_no_guarda_nada(navegador, db):
+    navegador.post("/reservas/nueva", data=RESERVA)
+    antes = contar(db, *TABLAS)
 
-    with pytest.raises(ErrorBD, match="No se puede eliminar"):
-        llamar("sp_app_eliminar_cliente", cliente_con_reservas)
+    # El escritorio EF-01 está libre de 11 a 13, pero la sala SR-01 ya
+    # está ocupada de 9 a 12. sp_crear_reserva alcanza a insertar y hace
+    # ROLLBACK de todo.
+    choque = dict(RESERVA, hora_inicio="11:00", hora_fin="13:00", espacios=["1", "6"])
+    respuesta = navegador.post("/reservas/nueva", data=choque)
 
-    assert consultar("SELECT COUNT(*) FROM cliente WHERE cliente_id = %s", cliente_con_reservas)[0][0] == 1
+    assert respuesta.status_code == 200
+    assert "ya está reservado en un horario que se cruza" in texto(respuesta)
+    assert contar(db, *TABLAS) == antes
+
+
+def test_formulario_invalido_no_llega_a_la_base(navegador, db):
+    antes = contar(db, *TABLAS)
+
+    malo = dict(RESERVA, fecha="2020-01-01", espacios=[])
+    respuesta = navegador.post("/reservas/nueva", data=malo)
+
+    assert "La fecha de la reserva no puede ser anterior a hoy." in texto(respuesta)
+    assert "Marque al menos un espacio." in texto(respuesta)
+    assert contar(db, *TABLAS) == antes
+
+
+def test_rollback_cliente_con_documento_repetido(navegador, db):
+    antes = contar(db, *TABLAS)
+
+    respuesta = navegador.post("/clientes/nuevo", data={
+        "tipo_cliente": "NATURAL", "email": "otra.persona@gmail.com", "telefono": "3001112233",
+        "documento": "70719489", "nombres": "Otra", "apellidos": "Persona",
+        "fecha_nacimiento": "1990-01-01"})
+
+    assert "Ya existe una persona con el documento 70719489" in texto(respuesta)
+    assert contar(db, *TABLAS) == antes          # tampoco quedó la fila en cliente
+
+
+def test_registrar_empresa_con_dos_telefonos(navegador, db):
+    antes = contar(db, *TABLAS)
+
+    respuesta = navegador.post("/clientes/nuevo", follow_redirects=True, data={
+        "tipo_cliente": "EMPRESA", "email": "compras@pruebaweb.com.co",
+        "telefono": "3015558899", "telefono_2": "6017778899", "nit": "901445566-7",
+        "razon_social": "Prueba Web S.A.S.", "nombre_contacto": "Mónica Lozano"})
+
+    despues = contar(db, *TABLAS)
+    assert "registrado" in texto(respuesta)
+    assert despues["cliente"] == antes["cliente"] + 1
+    assert despues["empresa"] == antes["empresa"] + 1
+    assert despues["telefono_cliente"] == antes["telefono_cliente"] + 2
+
+
+def test_pagar_todas_las_cuotas_y_finalizar(navegador, db):
+    sin_pago = dict(RESERVA, metodo_pago="", espacios=["6"])
+    respuesta = navegador.post("/reservas/nueva", data=sin_pago)
+    reserva_id = int(respuesta.headers["Location"].rsplit("/", 1)[1])
+    assert fila(db, "SELECT estado FROM reserva WHERE reserva_id = %s", (reserva_id,))[0] == "PENDIENTE"
+
+    for _ in range(2):
+        navegador.post(f"/reservas/{reserva_id}/pagar", data={"metodo_pago": "Nequi"})
+    respuesta = navegador.post(f"/reservas/{reserva_id}/finalizar", follow_redirects=True)
+
+    assert "finalizada" in texto(respuesta)
+    assert fila(db, "SELECT estado FROM reserva WHERE reserva_id = %s", (reserva_id,))[0] == "FINALIZADA"
+
+
+def test_no_se_elimina_un_cliente_con_reservas(navegador, db):
+    respuesta = navegador.post("/clientes/2/eliminar", follow_redirects=True)
+
+    assert "No se puede eliminar" in texto(respuesta)
+    assert fila(db, "SELECT COUNT(*) FROM cliente WHERE cliente_id = 2")[0] == 1
