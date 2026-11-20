@@ -1,8 +1,10 @@
 -- ============================================================
--- PERSONA 1
--- BANCO DE CONSULTAS
+-- BANCO DE CONSULTAS: WHERE / ORDER BY, UPDATE Y DELETE
 -- Caso 6: Red de espacios de coworking
 -- ============================================================
+
+SET NAMES utf8mb4;
+USE coworking_db;
 
 
 -- ============================================================
