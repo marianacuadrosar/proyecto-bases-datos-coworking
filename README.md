@@ -26,9 +26,9 @@ Integrantes:
 |---|---|
 | `docs/avance/` | Entrega del avance: supuestos, diccionario, decisiones de diseño, diagrama E/R, modelo relacional y normalización |
 | `docs/final/arquitectura.md` | Documento de arquitectura de la aplicación |
-| `sql/` | Scripts de MySQL: tablas, datos, consultas, índices, vistas y procedimientos |
+| `sql/` | Scripts de MySQL: tablas, datos, consultas, índices, procedimientos, funciones, transacciones y vistas |
 | `app/` | Aplicación web (Python + Flask) que usa la base de datos |
-| `tests/` | Pruebas automáticas de la aplicación y de las transacciones |
+| `tests/` | Pruebas automáticas de la aplicación, las validaciones y las transacciones |
 
 La aplicación permite crear, consultar, actualizar y eliminar clientes y reservas, y registrar pagos, sin escribir SQL.
 Por dentro solo llama procedimientos almacenados: en el código de la aplicación no hay SQL.
@@ -39,9 +39,9 @@ Por dentro solo llama procedimientos almacenados: en el código de la aplicació
 
 ### Requisitos
 
-- **MySQL Server 8.0.18 o más nuevo** y **MySQL Workbench** (o el cliente `mysql` de consola).
+- **MySQL Server 8.0.18 o más nuevo** y **MySQL Workbench**.
 - **Python 3.10 o más nuevo**. Para comprobarlo: `python --version`.
-- **Git**, o descargar el repositorio como ZIP desde GitHub (botón *Code → Download ZIP*).
+- **Git**, o descargar el repositorio como ZIP desde GitHub (*Code → Download ZIP*).
 
 ### Paso 1. Descargar el proyecto
 
@@ -57,23 +57,21 @@ Para cada uno: *File → Open SQL Script*, elegir el archivo y pulsar el rayo �
 
 | Orden | Script | Qué hace |
 |---|---|---|
-| 1 | `01_ddl.sql` | Crea la base `coworking_db` y sus 12 tablas. **Borra la base si ya existía.** |
-| 2 | `02_datos_prueba.sql` | Carga los datos de prueba |
-| 3 | `02_verificacion_datos.sql` | Revisa 20 reglas de los datos (todas deben dar 0) |
+| 1 | `01_ddl.sql` | Crea la base `coworking_db` y sus 12 tablas con sus restricciones. **Borra la base si ya existía.** |
+| 2 | `02_datos_prueba.sql` | Carga los datos de prueba (1.896 filas) |
+| 3 | `02_verificacion_datos.sql` | Revisa 20 reglas de los datos; todas deben dar 0 |
 | 4 | `03_consultas.sql` | Consultas WHERE / ORDER BY, UPDATE y DELETE |
-| 5 | `04_datos_sinteticos.sql` | Agrega 5.000 reservas históricas para las pruebas de rendimiento |
+| 5 | `04_datos_sinteticos.sql` | Agrega 5.000 reservas históricas para medir los índices |
 | 6 | `05_indices.sql` | Crea los índices y muestra EXPLAIN antes y después |
 | 7 | `06_consultas_analisis.sql` | Consultas INNER JOIN, agregación, GROUP BY y HAVING |
-| 8 | `10_vistas_union.sql` | Crea las 3 vistas y corre las consultas UNION |
-| 9 | `11_procedimientos_app.sql` | Crea los procedimientos que usa la aplicación |
+| 8 | `07_procedimientos_funciones.sql` | Funciones y procedimientos con transacción |
+| 9 | `08_transacciones.sql` | Demostración de COMMIT y ROLLBACK |
+| 10 | `09_consultas_avanzadas.sql` | Subconsultas en WHERE y en FROM, LEFT / RIGHT JOIN y SELF JOIN |
+| 11 | `10_vistas_union.sql` | Las 3 vistas y las consultas UNION / UNION ALL |
+| 12 | `11_procedimientos_app.sql` | Procedimientos de apoyo para la aplicación |
 
-Para usar la aplicación bastan los scripts 1, 2, 8 y 9. Los demás son el banco de consultas del proyecto.
-
-> Alternativa por consola (Git Bash, macOS o Linux), desde la carpeta del proyecto.
-> Pide la contraseña de MySQL una vez por script:
-> ```bash
-> for f in 01_ddl 02_datos_prueba 10_vistas_union 11_procedimientos_app; do mysql -u root -p < sql/$f.sql; done
-> ```
+Todos se ejecutaron en ese orden sobre una base vacía sin ningún error.
+**Para usar solo la aplicación bastan los scripts 1, 2, 8, 11 y 12.** Los demás son el banco de consultas y las demostraciones.
 
 ### Paso 3. Instalar las dependencias de Python
 
@@ -126,9 +124,17 @@ Con el entorno virtual activo:
 python -m pytest -v
 ```
 
-Son 15 pruebas: 8 revisan las validaciones de los formularios y 7 revisan las transacciones contra la base de datos.
-Las de base de datos crean sus propios datos en 2027 y los borran al terminar.
-Si no hay conexión a MySQL, esas 7 se saltan (*skipped*) en vez de fallar.
+Son 35 pruebas y tardan unos 30 segundos:
+
+| Archivo | Pruebas | Qué revisa |
+|---|---|---|
+| `tests/test_validaciones.py` | 9 | Las validaciones de los formularios (no usa MySQL) |
+| `tests/test_app_flujos.py` | 8 | La aplicación de punta a punta: formularios, mensajes y filas de las tablas |
+| `tests/test_transacciones.py` | 18 | Los procedimientos, las funciones y los ROLLBACK de `07_procedimientos_funciones.sql` |
+
+Las pruebas **no tocan `coworking_db`**: cada una crea desde cero una base aparte, `coworking_test`, con los mismos scripts.
+Usan el usuario y la contraseña del `.env` y necesitan el cliente de consola `mysql`, porque los scripts tienen `DELIMITER`.
+En Windows lo buscan solas en `C:\Program Files\MySQL\MySQL Server 8.0\bin`. Si MySQL está en otra carpeta, agréguela al PATH.
 
 ---
 
@@ -137,32 +143,16 @@ Si no hay conexión a MySQL, esas 7 se saltan (*skipped*) en vez de fallar.
 | Qué probar | Cómo |
 |---|---|
 | Consultar | *Espacios*: filtrar por ciudad y tipo. *Clientes*: buscar "gmail" o un NIT. *Reservas*: filtrar por estado |
-| Crear un cliente | *Nuevo cliente* → persona natural o empresa. Se guarda en 3 tablas en una sola transacción |
+| Crear un cliente | *Nuevo cliente* → persona natural o empresa, con uno o dos teléfonos. Se guarda en 3 tablas en una sola transacción |
 | Actualizar | Abrir un cliente → cambiar email o nombre, o agregar un teléfono |
-| Crear una reserva | *Nueva reserva* → elegir ciudad, cliente, fecha futura, horario y de 1 a 3 espacios. Con anticipo queda CONFIRMADA |
-| Registrar un pago | Abrir la reserva → *Registrar pago* en una cuota pendiente |
-| Cambiar el estado | Abrir una reserva PENDIENTE o CONFIRMADA → confirmar, finalizar o cancelar |
+| Crear una reserva | *Nueva reserva* → ciudad, sede, cliente, fecha futura, horario, uno o varios espacios y de 1 a 3 cuotas. Si se paga la cuota 1, queda CONFIRMADA |
+| Registrar un pago | Abrir la reserva → *Pagar la siguiente cuota* |
+| Finalizar o cancelar | Abrir una reserva → *Finalizar* (si está pagada) o *Cancelar* (si no tiene pagos) |
 | Eliminar | Un cliente sin reservas, o una reserva sin pagos |
-| **Rollback 1** | Crear otra reserva con uno de los mismos espacios y un horario que se cruce. Aparece *"El espacio N ya está reservado en ese horario. No se guardó la reserva."* y no queda nada guardado |
-| **Rollback 2** | Registrar una persona natural con el documento `70719489`, que ya existe. Aparece *"El documento o NIT ya está registrado en otro cliente. No se guardó ningún dato."* y el cliente no queda creado |
+| **Rollback 1** | Reserve la sala **SR-01** de la **Sede Chapinero** (Bogotá) un día futuro de 9:00 a 12:00. Después intente otra reserva con **EF-01 y SR-01** ese mismo día de 11:00 a 13:00. Aparece *"El espacio SR-01 ya está reservado en un horario que se cruza"* y no se guarda nada, ni siquiera el escritorio que sí estaba libre |
+| **Rollback 2** | Registre una persona natural con el documento `70719489`, que ya existe. Aparece *"Ya existe una persona con el documento 70719489"* y el cliente no queda creado |
 
 El documento de arquitectura explica cómo funciona cada flujo por dentro: [docs/final/arquitectura.md](docs/final/arquitectura.md).
-
----
-
-## Usuario de MySQL con permisos mínimos (opcional)
-
-Para no usar `root` en la aplicación se puede crear un usuario que solo pueda leer y ejecutar procedimientos.
-Ejecute esto en Workbench con un usuario administrador, cambiando la contraseña:
-
-```sql
-CREATE USER 'coworking_app'@'localhost' IDENTIFIED BY 'una-contraseña-segura';
-GRANT SELECT, EXECUTE ON coworking_db.* TO 'coworking_app'@'localhost';
-```
-
-Después ponga ese usuario en `DB_USER` y `DB_PASSWORD` del `.env`.
-La aplicación funciona igual, porque los procedimientos se ejecutan con los permisos de quien los creó.
-Las pruebas automáticas sí necesitan un usuario que pueda borrar (por ejemplo `root`), porque limpian lo que crean.
 
 ---
 
@@ -170,7 +160,8 @@ Las pruebas automáticas sí necesitan un usuario que pueda borrar (por ejemplo 
 
 | Mensaje | Solución |
 |---|---|
-| *No fue posible conectarse a la base de datos* | Revise que el servicio MySQL esté encendido y que usuario y contraseña del `.env` sean correctos |
-| *Falta un procedimiento en la base de datos* | Ejecute `10_vistas_union.sql` y `11_procedimientos_app.sql` (en ese orden) |
+| *No fue posible conectarse a la base de datos* | Revise que el servicio MySQL esté encendido y que el usuario y la contraseña del `.env` sean correctos |
+| *Falta un procedimiento en la base de datos* | Ejecute `07_procedimientos_funciones.sql`, `10_vistas_union.sql` y `11_procedimientos_app.sql`, en ese orden |
 | `ModuleNotFoundError: No module named 'flask'` | Active el entorno virtual (paso 3) antes de `python app/app.py` |
 | `python` no se reconoce | En Windows pruebe con `py` en lugar de `python` |
+| Las pruebas fallan con *"mysql" no se reconoce* | Agregue al PATH la carpeta `bin` de su instalación de MySQL |
