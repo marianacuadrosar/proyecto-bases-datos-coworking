@@ -27,5 +27,14 @@
 
     {% block contenido %}{% endblock %}
   </main>
+
+  <script>
+    // Si hubo un error, se sube hasta el mensaje para que no pase desapercibido.
+    const aviso = document.querySelector('.aviso.error');
+    if (aviso) {
+      history.scrollRestoration = 'manual';
+      window.addEventListener('load', () => aviso.scrollIntoView({ block: 'center' }));
+    }
+  </script>
 </body>
 </html>

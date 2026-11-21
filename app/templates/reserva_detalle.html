@@ -60,6 +60,7 @@
   </form>
   {% endif %}
 
+  {% if r.pagado == 0 %}
   <form method="post" action="{{ url_for('reserva_cancelar', reserva_id=r.reserva_id) }}"
         onsubmit="return confirm('¿Cancelar la reserva? Sus espacios quedarán libres.');">
     <button class="peligro">Cancelar</button>
@@ -69,6 +70,7 @@
         onsubmit="return confirm('¿Eliminar la reserva? No se puede deshacer.');">
     <button class="peligro">Eliminar</button>
   </form>
+  {% endif %}
 </div>
 <p class="nota">Pagar la primera cuota confirma la reserva. Solo se finaliza una reserva pagada por completo.
 Una reserva con pagos no se puede cancelar ni eliminar.</p>
