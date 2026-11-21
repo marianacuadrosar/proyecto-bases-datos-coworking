@@ -93,10 +93,14 @@ ORDER BY monto DESC;
 -- Justificación:
 -- UPDATE permite modificar el estado de una reserva ya
 -- existente sin crear un nuevo registro.
+--
+-- Se usa la reserva 167, que en los datos de prueba está
+-- PENDIENTE. La condición estado = 'PENDIENTE' evita
+-- confirmar por error una reserva cancelada o finalizada.
 
 UPDATE reserva
 SET estado = 'CONFIRMADA'
-WHERE reserva_id = 25
+WHERE reserva_id = 167
   AND estado = 'PENDIENTE';
 
 
@@ -168,9 +172,12 @@ WHERE cliente_id = 15
 -- Justificación:
 -- DELETE elimina únicamente la fila de la entidad asociativa
 -- RESERVA_ESPACIO que conecta ambas entidades.
+--
+-- Se usa la reserva 188, que en los datos de prueba incluye
+-- los espacios 12 y 13. Después del DELETE conserva el 13.
 
 DELETE FROM reserva_espacio
-WHERE reserva_id = 40
+WHERE reserva_id = 188
   AND espacio_id = 12;
 
 
