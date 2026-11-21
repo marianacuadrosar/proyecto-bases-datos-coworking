@@ -4,7 +4,7 @@ Este documento muestra cómo se llega a las tablas del modelo relacional (`05_mo
 
 La idea es comprobar el modelo por un segundo camino.
 
-Persona 3 llegó a las tablas desde el diagrama E/R. Aquí se llega desde el otro lado: se parte de una sola planilla con todos los datos mezclados y se va partiendo hasta que no quede información repetida.
+El modelo relacional llegó a las tablas desde el diagrama E/R. Aquí se llega desde el otro lado: se parte de una sola planilla con todos los datos mezclados y se va partiendo hasta que no quede información repetida.
 
 Si los dos caminos terminan en las mismas tablas, el modelo está bien hecho.
 
@@ -33,7 +33,7 @@ Si los dos caminos terminan en las mismas tablas, el modelo está bien hecho.
 
 Antes de tener base de datos, la recepción de una sede anotaría cada reserva en un formato como este.
 
-Es el formato de la reserva 10 del ejemplo que usa Persona 3: una empresa reserva una sala de juntas y dos escritorios, y paga en dos cuotas.
+Es el formato de la reserva 10, el mismo ejemplo de `05_modelo_relacional.md`: una empresa reserva una sala de juntas y dos escritorios, y paga en dos cuotas.
 
 ```
 RESERVA N.° 10                         Creada: 2026-03-02     Estado: CONFIRMADA
@@ -712,7 +712,7 @@ El proyecto solo pide 3FN, pero el modelo cumple también FNBC.
 
 ---
 
-## 8. Cruce con el modelo relacional de Persona 3
+## 8. Cruce con el modelo relacional
 
 Se comparan las tablas obtenidas por normalización con las de `05_modelo_relacional.md`, que salieron del diagrama E/R.
 

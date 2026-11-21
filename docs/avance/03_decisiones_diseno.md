@@ -1,32 +1,31 @@
 # Decisiones de diseño
 
-## 1. Modelar persona natural y empresa dentro de una sola entidad CLIENTE
+## 1. CLIENTE como superclase de PERSONA_NATURAL y EMPRESA
 
-Durante el diseño se consideraron dos alternativas para representar los tipos de clientes de la red de coworking.
+Los clientes pueden ser personas naturales o empresas. Las dos hacen lo mismo dentro del sistema, reservar espacios, pero no guardan los mismos datos: una persona tiene documento, nombres, apellidos y fecha de nacimiento, y una empresa tiene NIT, razón social y persona de contacto.
 
-La primera alternativa consistía en crear entidades separadas para PERSONA_NATURAL y EMPRESA. La segunda consistía en utilizar una única entidad CLIENTE con un atributo llamado tipo_cliente que permitiera distinguir entre ambos tipos.
+Se consideraron tres formas de modelarlo:
 
-Se decidió utilizar una sola entidad CLIENTE porque tanto las personas naturales como las empresas cumplen la misma función principal dentro del sistema: realizar reservas de espacios. Separarlas en dos entidades introduciría una mayor complejidad en el modelo sin que el caso de negocio especifique atributos suficientemente diferentes para justificar dicha separación.
+| Alternativa | Problema |
+|---|---|
+| Una sola entidad CLIENTE con todos los atributos y un campo `tipo_cliente` | Cada cliente dejaría vacía casi la mitad de sus columnas: una empresa no tiene fecha de nacimiento y una persona no tiene NIT |
+| Dos entidades independientes, PERSONA_NATURAL y EMPRESA, sin entidad común | RESERVA tendría que relacionarse con dos entidades distintas, y una llave foránea solo puede apuntar a una tabla. Lo mismo pasaría con los teléfonos |
+| **CLIENTE como entidad general, especializada en PERSONA_NATURAL y EMPRESA** (la elegida) | — |
 
-Por esta razón, CLIENTE incluye el atributo tipo_cliente, que permite identificar si el cliente corresponde a una persona natural o una empresa.
+Se eligió la especialización. CLIENTE guarda lo que comparten todos los clientes: email, fecha de registro, teléfonos y `tipo_cliente`. PERSONA_NATURAL y EMPRESA guardan solo lo propio de cada tipo y usan el mismo `cliente_id` de CLIENTE como llave.
 
-**Actualización tras el diagrama E/R.** Al detallar los atributos se vio que sí hay datos distintos para cada tipo: una persona natural tiene documento, nombres, apellidos y fecha de nacimiento, y una empresa tiene NIT, razón social y persona de contacto. Con una sola tabla, cada cliente dejaría vacía casi la mitad de sus columnas.
+La especialización es disjunta y total (supuesto 15): cada cliente es exactamente una persona natural o una empresa. `tipo_cliente` dice en cuál de las dos subclases están sus datos.
 
-Por eso la decisión final combina las dos alternativas:
-
-- Se conserva una única entidad CLIENTE para lo común (email, fecha de registro, teléfonos y tipo_cliente). Así RESERVA sigue apuntando a una sola entidad, que era el motivo original de esta decisión.
-- CLIENTE se especializa en PERSONA_NATURAL y EMPRESA (disjunta y total, supuesto 15) para guardar los datos propios de cada tipo.
-
-`tipo_cliente` indica en cuál de las dos subclases están los datos del cliente. Ver `04_diagrama_er_chen.md` y `05_modelo_relacional.md`, sección 3.6.
+Así RESERVA y TELEFONO_CLIENTE se relacionan con una sola entidad, CLIENTE, sin importar el tipo de cliente, y ninguna tabla queda con columnas vacías. Ver `04_diagrama_er_chen.md` y `05_modelo_relacional.md`, sección 3.6.
 
 ## 2. Modelar la tarifa mediante una relación ternaria
 
-Inicialmente se consideró almacenar la tarifa como un atributo directo de la entidad ESPACIO. Sin embargo, esta alternativa limitaría la posibilidad de representar precios diferentes según la sede, el tipo de espacio y la modalidad de reserva.
+Inicialmente se consideró guardar la tarifa como un atributo de ESPACIO. Esa opción repetiría el mismo precio en todos los espacios iguales de una sede y no permitiría tener un precio por hora y otro por día.
 
-Se decidió modelar la tarifa mediante una relación ternaria entre SEDE, TIPO_ESPACIO y MODALIDAD_RESERVA. De esta manera, el valor de la tarifa depende de la combinación de los tres elementos.
+Se decidió modelar la tarifa como una relación ternaria, TARIFA, entre SEDE, TIPO_ESPACIO y MODALIDAD, con el atributo `valor`. El precio depende de la combinación de los tres.
 
-Por ejemplo, una sala de juntas puede tener una tarifa diferente según la sede en la que se encuentre y dependiendo de si se reserva por hora o por día.
+Por ejemplo, una sala de reuniones tiene un precio por hora y otro por día, y los dos cambian de una sede a otra.
 
-La relación DEFINE_TARIFA tendrá el atributo valor_tarifa, permitiendo mantener las tarifas de manera independiente de los espacios individuales y evitando duplicar información.
+Así las tarifas se mantienen aparte de los espacios individuales y cada precio se escribe una sola vez. La normalización llega a la misma tabla por su cuenta (`06_normalizacion.md`, dependencia DT5).
 
-(Esta decisión se adopta como un supuesto adicional del grupo, ya que el caso establece que la tarifa depende de la sede y que existen reservas por hora o por día, pero no especifica de manera explícita cómo se combinan estas variables para determinar el precio). 
+Es un supuesto del grupo (supuesto 8): el caso dice que la tarifa depende de la sede y que hay reservas por hora o por día, pero no dice cómo se combinan esas variables para fijar el precio.
