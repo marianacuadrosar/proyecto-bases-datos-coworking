@@ -29,7 +29,6 @@
 --
 -- Reglas que cumplen los datos, aunque el DDL todavía no las obliga:
 --   - Cada cliente está en una sola subclase y coincide con tipo_cliente.
---   - Ningún email se repite.
 --   - Un espacio nunca tiene dos reservas que se crucen en el tiempo.
 --   - Toda reserva cae dentro del horario de su sede. Las reservas por
 --     día van de la apertura al cierre.

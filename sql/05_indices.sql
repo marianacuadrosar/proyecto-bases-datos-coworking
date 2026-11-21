@@ -300,8 +300,8 @@ ORDER BY monto DESC;
 -- ============================================================
 --   - Llaves foráneas (cliente_id, espacio_id, modalidad_id, sede_id,
 --     tipo_id): InnoDB ya les creó índice.
---   - cliente.email: si se agrega UNIQUE (email), como se recomendó
---     para el DDL, MySQL crea el índice solo. Otro sería duplicado.
+--   - cliente.email: la restricción UNIQUE uq_cliente_email del DDL
+--     ya le crea un índice. Otro sería duplicado.
 --   - reserva.modalidad_id y cliente.tipo_cliente: dos valores cada
 --     una; el índice no descarta casi nada.
 --   - sede.ciudad: sede tiene 50 filas. Leerla completa cuesta menos

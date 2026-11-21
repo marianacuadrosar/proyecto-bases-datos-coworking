@@ -80,6 +80,10 @@ CREATE TABLE cliente (
     CONSTRAINT pk_cliente
         PRIMARY KEY (cliente_id),
 
+    -- Dos clientes no pueden registrarse con el mismo email
+    CONSTRAINT uq_cliente_email
+        UNIQUE (email),
+
     CONSTRAINT ck_tipo_cliente
         CHECK (tipo_cliente IN ('NATURAL', 'EMPRESA'))
 );
