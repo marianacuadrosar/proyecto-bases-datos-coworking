@@ -16,6 +16,8 @@ Integrantes:
 - Juan Diego Saldarriaga
 - Nicolás Rodriguez
 
+Programa: Ingenieria Informática
+
 **23/11/2026**
 
 ---
